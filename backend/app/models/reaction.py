@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import String, Float, Boolean, ForeignKey
+from sqlalchemy import String, Float, Boolean, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,7 +13,7 @@ class Reaction(Base):
     bigg_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     name: Mapped[str | None] = mapped_column(String(500))
     subsystem: Mapped[str | None] = mapped_column(String(200))
-    reaction_formula: Mapped[str | None] = mapped_column(String(1000))
+    reaction_formula: Mapped[str | None] = mapped_column(Text)
     default_lower_bound: Mapped[float] = mapped_column(Float, default=-1000.0)
     default_upper_bound: Mapped[float] = mapped_column(Float, default=1000.0)
     is_reversible: Mapped[bool] = mapped_column(Boolean, default=True)

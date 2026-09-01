@@ -12,8 +12,10 @@ class EnzymeKinetics(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     reaction_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("reactions.id"), nullable=False, index=True)
     ec_number: Mapped[str | None] = mapped_column(String(20), index=True)
+    substrate: Mapped[str | None] = mapped_column(String(200))
     km_value: Mapped[float | None] = mapped_column(Float)  # mM
     kcat_value: Mapped[float | None] = mapped_column(Float)  # s^-1
+    specific_activity: Mapped[float | None] = mapped_column(Float)  # U/mg
     optimal_temp: Mapped[float | None] = mapped_column(Float)  # Celsius
     optimal_ph: Mapped[float | None] = mapped_column(Float)
     temp_stability_min: Mapped[float | None] = mapped_column(Float)
@@ -21,6 +23,7 @@ class EnzymeKinetics(Base):
     ph_stability_min: Mapped[float | None] = mapped_column(Float)
     ph_stability_max: Mapped[float | None] = mapped_column(Float)
     organism_source: Mapped[str | None] = mapped_column(String(200))
+    source_db: Mapped[str | None] = mapped_column(String(50))
     brenda_id: Mapped[str | None] = mapped_column(String(50))
     activity_curve_temp: Mapped[dict | None] = mapped_column(JSONB)  # [{"temp": 25, "activity": 0.6}, ...]
     activity_curve_ph: Mapped[dict | None] = mapped_column(JSONB)    # [{"ph": 5.0, "activity": 0.3}, ...]
