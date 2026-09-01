@@ -14,7 +14,7 @@ redis==5.0.7
 celery==5.4.0
 
 # Biology
-cobrapy==0.29.0
+cobra==0.29.1
 biopython==1.83
 
 # Data

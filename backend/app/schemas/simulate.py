@@ -30,6 +30,8 @@ class ReactionFluxOut(BaseModel):
 
 
 class SimulationResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
     task_id: UUID
     status: str
     growth_rate: Optional[float] = None
@@ -46,3 +48,4 @@ class SimulationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
