@@ -1,6 +1,6 @@
 # GENESIS — Project Progress Log
 
-> **Last Updated**: 2026-09-02 | **Updated By**: Arpit
+> **Last Updated**: 2026-09-04 | **Updated By**: Arpit
 
 This file tracks the complete progress, decisions, and context for all team members. **Update this file at the end of every work session before pushing.**
 
@@ -44,8 +44,19 @@ All seed scripts are in `backend/app/data/`:
 **Total: 12,256 rows of real biological data in PostgreSQL.**
 
 #### Phase 2: Remaining
-- [ ] Step 7: Implement Knowledge API endpoints (actual DB queries replacing stubs)
-- [ ] Step 8: Connect Parts Library UI to API
+- [x] Step 7: Implement Knowledge API endpoints (gene search, TF listing, pathways)
+- [x] Step 8: Connect Parts Library UI + Knowledge UI to live API
+
+### 📅 2026-09-04 — Phase 2 Completion (Arpit)
+
+#### Phase 2: API & Frontend ✅ COMPLETE
+- [x] Knowledge API — gene search (by name/locus_tag/product), TF listing with condition filter, pathway listing
+- [x] Parts API — filter by type/source, search, pagination, part detail with sequence
+- [x] Results API — get simulation by ID, list recent simulations
+- [x] Frontend Knowledge page — 3-tab interface (Genes/TFs/Pathways), connected to live API
+- [x] Frontend Parts page — type filter buttons, search, strength bars, click-to-view sequence detail
+- [x] Fixed Pydantic `Config` + `model_config` conflict in SimulationResponse
+- [x] Added `docs/logs.md` for team collaboration
 
 ---
 
