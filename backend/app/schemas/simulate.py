@@ -30,7 +30,7 @@ class ReactionFluxOut(BaseModel):
 
 
 class SimulationResponse(BaseModel):
-    model_config = {"protected_namespaces": ()}
+    model_config = {"protected_namespaces": (), "from_attributes": True}
 
     task_id: UUID
     status: str
@@ -45,7 +45,4 @@ class SimulationResponse(BaseModel):
     model_versions: Optional[dict] = None
     computed_at: Optional[datetime] = None
     compute_time_ms: Optional[int] = None
-
-    class Config:
-        from_attributes = True
 
