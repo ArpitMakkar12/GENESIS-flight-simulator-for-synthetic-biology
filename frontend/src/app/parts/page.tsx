@@ -159,7 +159,7 @@ export default function PartsPage() {
                   {p.annotations?.inducer && `Inducer: ${p.annotations.inducer}`}
                   {p.annotations?.RPU !== undefined && `RPU: ${p.annotations.RPU}`}
                   {p.annotations?.protein && `Protein: ${p.annotations.protein}`}
-                  {p.annotations?.efficiency !== undefined && `Eff: ${(p.annotations.efficiency * 100).toFixed(0)}%`}
+                  {p.annotations?.efficiency !== undefined && `Eff: ${(Number(p.annotations.efficiency) * 100).toFixed(0)}%`}
                 </td>
               </tr>
             ))}
