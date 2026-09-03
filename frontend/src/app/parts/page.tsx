@@ -10,7 +10,12 @@ interface Part {
   sequence_length: number | null;
   source: string | null;
   strength: number | null;
-  annotations: Record<string, any> | null;
+  annotations: Record<string, string | number | boolean> | null;
+}
+
+interface PartDetail extends Part {
+  sequence: string | null;
+  registry_id: string | null;
 }
 
 const PART_TYPES = [
@@ -26,11 +31,9 @@ export default function PartsPage() {
   const [total, setTotal] = useState(0);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [selectedPart, setSelectedPart] = useState<any>(null);
+  const [selectedPart, setSelectedPart] = useState<PartDetail | null>(null);
 
   const loadParts = async (type: string | null = selectedType, searchTerm: string = search) => {
-    setLoading(true);
     try {
       const params = new URLSearchParams();
       if (type) params.set('part_type', type);
@@ -42,7 +45,6 @@ export default function PartsPage() {
       setParts(data.parts);
       setTotal(data.total);
     } catch (e) { console.error(e); }
-    setLoading(false);
   };
 
   const loadPartDetail = async (name: string) => {
@@ -52,7 +54,18 @@ export default function PartsPage() {
     } catch (e) { console.error(e); }
   };
 
-  useEffect(() => { loadParts(null, ''); }, []);
+  useEffect(() => {
+    // Initial load — fetch all parts
+    const init = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/parts?limit=50`);
+        const data = await res.json();
+        setParts(data.parts);
+        setTotal(data.total);
+      } catch (e) { console.error(e); }
+    };
+    init();
+  }, []);
 
   const strengthBar = (strength: number | null) => {
     if (strength === null || strength === undefined) return null;

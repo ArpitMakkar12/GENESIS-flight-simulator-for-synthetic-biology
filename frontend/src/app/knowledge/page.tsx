@@ -66,13 +66,6 @@ export default function KnowledgePage() {
     setLoading(false);
   };
 
-  const lookupGene = async (identifier: string) => {
-    try {
-      const res = await fetch(`${API_BASE}/genes/${encodeURIComponent(identifier)}`);
-      if (res.ok) setSelectedGene(await res.json());
-    } catch (e) { console.error(e); }
-  };
-
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Knowledge Base</h1>
