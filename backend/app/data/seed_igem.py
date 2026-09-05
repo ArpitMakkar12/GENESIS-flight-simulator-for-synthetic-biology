@@ -85,7 +85,7 @@ def seed_igem() -> None:
 
         # Spot check
         b0034 = session.execute(
-            text("SELECT name, part_type, strength FROM genetic_parts WHERE name = 'BBa_B0034'")
+            text("SELECT name, part_type, measured_strength FROM genetic_parts WHERE name = 'BBa_B0034'")
         ).fetchone()
         if b0034:
             print(f"\nSpot check: {b0034[0]} | {b0034[1]} | strength={b0034[2]}")

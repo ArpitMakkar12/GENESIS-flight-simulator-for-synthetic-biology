@@ -103,7 +103,7 @@ def seed_tcdb() -> None:
         print("\nSpot checks:")
         lacy = session.execute(
             text("""
-                SELECT t.transporter_name, t.substrate, t.mechanism, g.name
+                SELECT t.tcdb_id, t.substrate, t.transport_type, g.name
                 FROM transporters t JOIN genes g ON t.gene_id = g.id
                 WHERE g.name = 'lacY'
             """)
@@ -113,7 +113,7 @@ def seed_tcdb() -> None:
 
         ptsg = session.execute(
             text("""
-                SELECT t.transporter_name, t.substrate, t.mechanism, g.name
+                SELECT t.tcdb_id, t.substrate, t.transport_type, g.name
                 FROM transporters t JOIN genes g ON t.gene_id = g.id
                 WHERE g.name = 'ptsG'
             """)
