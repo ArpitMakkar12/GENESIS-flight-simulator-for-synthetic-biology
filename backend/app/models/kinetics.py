@@ -10,7 +10,7 @@ class EnzymeKinetics(Base):
     __tablename__ = "enzyme_kinetics"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    reaction_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("reactions.id"), nullable=False, index=True)
+    reaction_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("reactions.id"), nullable=True, index=True)
     ec_number: Mapped[str | None] = mapped_column(String(20), index=True)
     substrate: Mapped[str | None] = mapped_column(String(200))
     km_value: Mapped[float | None] = mapped_column(Float)  # mM
