@@ -44,7 +44,7 @@ services:
       - ./backend:/app
       - ./ai:/app/ai_module
       - ./contracts:/app/contracts
-      - model_data:/app/data/models
+      - ./data/models:/app/data/models
     depends_on:
       db:
         condition: service_healthy
@@ -70,4 +70,3 @@ services:
 
 volumes:
   pgdata:
-  model_data:

@@ -58,6 +58,28 @@ All seed scripts are in `backend/app/data/`:
 - [x] Fixed Pydantic `Config` + `model_config` conflict in SimulationResponse
 - [x] Added `docs/logs.md` for team collaboration
 
+### 📅 2026-09-06 — Contract Fixes + Keshav Integration (Arpit)
+
+#### Keshav's First PR Merged ✅
+- PR #1: `keshav/fix-schema-drift` — fixed broken spot-check SQL in seed scripts, made `reaction_id` nullable in enzyme_kinetics
+
+#### Contract Fixes (4 issues from Keshav's AI Layer Plan)
+- [x] Added `gene_ids: list[str]` to `PredictionInput` with validation
+- [x] Redefined `relative_expression` as fold-change vs reference (not 0-1 capped)
+- [x] Added `reference_expression_tpm` for proper flux unit conversion
+- [x] Removed `rbs_scores` from input — AI layer computes RBS internally
+- [x] Added `prediction_source` field ("lookup" vs "model") for transparency
+- [x] Documented sequence format: 300bp upstream + CDS
+
+#### Infrastructure Fixes
+- [x] Docker: changed `model_data` from named volume to bind mount (`./data/models:/app/data/models`)
+- [x] Created `data/models/` directory for Keshav's ONNX exports
+
+#### Ownership Clarified
+- **Arpit owns**: `bound_compiler.py`, `fba_solver.py`, `tf_resolver.py`, `simulation_runner.py`
+- **Keshav owns**: `ai/` (all), `backend/app/services/rbs_calculator.py`
+- **Shared**: `contracts/interfaces.py`
+
 ---
 
 ## Architecture Decisions Log
