@@ -6,3 +6,6 @@ numpy>=1.26.0
 pandas>=2.2.0
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
+torch>=2.0.0
+transformers>=4.40.0
+einops>=0.7.0
