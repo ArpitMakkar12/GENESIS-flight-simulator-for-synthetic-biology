@@ -4,3 +4,5 @@ scikit-learn>=1.4.0
 onnxruntime>=1.17.0
 numpy>=1.26.0
 pandas>=2.2.0
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
