@@ -26,3 +26,4 @@ numpy==1.26.4
 # Utilities
 python-dotenv==1.0.1
 httpx==0.27.0
+requests==2.32.3
