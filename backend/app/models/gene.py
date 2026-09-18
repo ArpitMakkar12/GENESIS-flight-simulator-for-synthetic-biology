@@ -21,6 +21,8 @@ class Gene(Base):
     cog_category: Mapped[str | None] = mapped_column(String(10))
     gc_content: Mapped[float | None] = mapped_column(Float)
     length_bp: Mapped[int | None] = mapped_column(Integer)
+    reference_expression_tpm: Mapped[float | None] = mapped_column(Float)  # TPM under reference conditions
+    expression_source: Mapped[str | None] = mapped_column(String(50))  # e.g. "PRECISE-1K"
 
     # Relationships
     regulations: Mapped[list["GeneRegulation"]] = relationship(back_populates="gene", lazy="selectin")
