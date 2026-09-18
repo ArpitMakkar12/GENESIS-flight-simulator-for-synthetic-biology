@@ -36,7 +36,8 @@ out/
 *.pth
 *.onnx
 *.bin
-data/
+/data/
+backend/data/
 ai/weights/
 
 # OS
