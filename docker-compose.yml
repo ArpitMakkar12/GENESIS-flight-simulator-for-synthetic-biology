@@ -42,7 +42,7 @@ services:
       MODEL_DIR: /app/data/models
     volumes:
       - ./backend:/app
-      - ./ai:/app/ai_module
+      - ./ai:/app/ai
       - ./contracts:/app/contracts
       - ./data/models:/app/data/models
     depends_on:
