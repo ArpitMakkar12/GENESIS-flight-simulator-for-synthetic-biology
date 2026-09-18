@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.simulation import Simulation
 from app.schemas.simulate import SimulationRequest, SimulationResponse, GeneExpressionOut
 from app.services.simulation_runner import SimulationRunner
 
@@ -28,9 +29,12 @@ async def run_simulation(
     """Run a full BioSandbox simulation pipeline.
 
     Accepts environmental parameters and returns predicted gene expression,
-    metabolic flux, growth rate, and viability.
+    metabolic flux, growth rate, and viability. Results are persisted to the
+    simulations table for later retrieval via /results.
     """
     runner = get_runner()
+    sim_id = uuid4()
+    started_at = datetime.now(timezone.utc)
 
     try:
         result = await runner.run(
@@ -45,6 +49,8 @@ async def run_simulation(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
 
+    completed_at = datetime.now(timezone.utc)
+
     # Map expression predictions to response schema
     expression_out = None
     if result.get("expression_predictions"):
@@ -57,8 +63,35 @@ async def run_simulation(
             for p in result["expression_predictions"]
         ]
 
+    # Persist simulation result to database
+    sim = Simulation(
+        id=sim_id,
+        construct_id=request.construct_id,
+        temperature=request.temperature,
+        ph=request.ph,
+        oxygen_level=request.oxygen_level,
+        carbon_source=request.carbon_source,
+        nitrogen_source=request.nitrogen_source,
+        status=result["status"],
+        expression_results=result.get("expression_predictions"),
+        fba_results={
+            "active_pathways": result.get("active_pathways", []),
+            "bottlenecks": result.get("bottlenecks", []),
+            "flux_summary": result.get("flux_summary", {}),
+        },
+        model_versions={"predictor": result.get("model_version", "unknown")},
+        growth_rate=result.get("growth_rate"),
+        doubling_time=result.get("doubling_time"),
+        viability_score=result.get("viability_score"),
+        started_at=started_at,
+        completed_at=completed_at,
+        compute_time_ms=result.get("compute_time_ms"),
+    )
+    db.add(sim)
+    await db.commit()
+
     return SimulationResponse(
-        task_id=uuid4(),
+        task_id=sim_id,
         status=result["status"],
         growth_rate=result.get("growth_rate"),
         doubling_time=result.get("doubling_time"),
@@ -67,7 +100,6 @@ async def run_simulation(
         active_pathways=result.get("active_pathways"),
         bottlenecks=result.get("bottlenecks"),
         model_versions={"predictor": result.get("model_version", "unknown")},
-        computed_at=datetime.now(timezone.utc),
+        computed_at=completed_at,
         compute_time_ms=result.get("compute_time_ms"),
     )
-

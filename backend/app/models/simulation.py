@@ -11,7 +11,7 @@ class Simulation(Base):
     __tablename__ = "simulations"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    construct_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("constructs.id"), nullable=False, index=True)
+    construct_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("constructs.id"), nullable=True, index=True)
 
     # Environmental parameters
     temperature: Mapped[float] = mapped_column(Float, default=37.0)
