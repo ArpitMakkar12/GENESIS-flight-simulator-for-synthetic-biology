@@ -76,3 +76,20 @@ async def list_results(
         }
         for s in sims
     ]
+
+
+@router.delete("/results/{task_id}", status_code=204)
+async def delete_result(
+    task_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a simulation result by ID."""
+    result = await db.execute(
+        select(Simulation).where(Simulation.id == task_id)
+    )
+    sim = result.scalar_one_or_none()
+    if not sim:
+        raise HTTPException(status_code=404, detail=f"Simulation '{task_id}' not found")
+    await db.delete(sim)
+    await db.commit()
+

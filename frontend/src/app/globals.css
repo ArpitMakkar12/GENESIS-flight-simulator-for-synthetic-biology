@@ -2,26 +2,226 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+/* ─── GENESIS · Microscope Field theme tokens ────────────────
+   Dark-field microscopy: a glowing organism drifting in a
+   particle field, glass readouts floating over it.          */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-deep: #01070c;
+  --bg-mid: #031722;
+  --bg-glow: #06364a;
+
+  --ink: #eaffff;
+  --ink-soft: #d9f7ff;
+  --muted: #8cc3d4;
+  --muted-dim: #5c8494;
+
+  --cyan: #3ef2ff;
+  --cyan-strong: #7dffef;
+  --cyan-dim: rgba(62, 242, 255, 0.55);
+
+  --stress: #ff5a36;
+  --amber: #ffcf66;
+  --violet: #b98bff;
+
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-strong: rgba(255, 255, 255, 0.09);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --line: rgba(255, 255, 255, 0.09);
+
+  --background: var(--bg-deep);
+  --foreground: var(--ink);
+
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg-deep);
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  min-height: 100vh;
+  background-color: var(--bg-deep);
+  background-image:
+    radial-gradient(ellipse 1200px 900px at 18% -10%, rgba(6, 54, 74, 0.55) 0%, transparent 55%),
+    radial-gradient(ellipse 900px 700px at 100% 0%, rgba(62, 242, 255, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse 1400px 1000px at 50% 110%, var(--bg-glow) 0%, var(--bg-mid) 45%, var(--bg-deep) 80%);
+  background-attachment: fixed;
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 22%, rgba(62, 242, 255, 0.35) 50%, transparent 51%),
+    radial-gradient(1px 1px at 32% 68%, rgba(62, 242, 255, 0.28) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 58% 12%, rgba(62, 242, 255, 0.22) 50%, transparent 51%),
+    radial-gradient(1px 1px at 74% 44%, rgba(62, 242, 255, 0.3) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 86% 78%, rgba(62, 242, 255, 0.2) 50%, transparent 51%),
+    radial-gradient(1px 1px at 6% 82%, rgba(62, 242, 255, 0.26) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 45% 90%, rgba(62, 242, 255, 0.18) 50%, transparent 51%),
+    radial-gradient(1px 1px at 94% 30%, rgba(62, 242, 255, 0.24) 50%, transparent 51%);
+  background-size: 100% 100%;
+}
+
+#__next,
+body > div {
+  position: relative;
+  z-index: 1;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Sora", system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.glass-strong {
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+}
+
+.glass-hover {
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.glass-hover:hover {
+  border-color: rgba(62, 242, 255, 0.35);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 0 0 1px rgba(62, 242, 255, 0.12), 0 12px 32px -12px rgba(3, 23, 34, 0.8);
+}
+
+.glow-text {
+  text-shadow: 0 0 18px rgba(62, 242, 255, 0.45);
+}
+
+.font-mono-readout {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(62, 242, 255, 0.25); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(62, 242, 255, 0.45); }
+
+.dna-spinner {
+  width: 40px; height: 40px; position: relative;
+  filter: drop-shadow(0 0 6px rgba(62, 242, 255, 0.5));
+}
+.dna-strand {
+  position: absolute; inset: 0;
+  border: 3px solid transparent;
+  border-top-color: var(--cyan); border-bottom-color: var(--cyan);
+  border-radius: 50%; animation: dna-rotate 1.2s linear infinite;
+}
+.dna-strand-2 {
+  border-top-color: var(--cyan-strong); border-bottom-color: var(--cyan-strong);
+  animation-delay: -0.4s; animation-direction: reverse;
+}
+@keyframes dna-rotate { to { transform: rotate(360deg); } }
+
+input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  background: transparent; cursor: pointer; width: 100%; height: 8px;
+}
+input[type="range"]::-webkit-slider-track {
+  background: rgba(62, 242, 255, 0.15);
+  border-radius: 999px;
+  height: 6px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--cyan);
+  border: 3px solid #031722;
+  margin-top: -6px;
+  box-shadow: 0 0 10px rgba(62, 242, 255, 0.7);
+  transition: box-shadow 0.15s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 16px rgba(62, 242, 255, 0.95);
+}
+
+input[type="range"]::-moz-range-track {
+  background: rgba(62, 242, 255, 0.15);
+  border-radius: 999px;
+  height: 6px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--cyan);
+  border: 3px solid #031722;
+  box-shadow: 0 0 10px rgba(62, 242, 255, 0.7);
+}
+
+.page-enter { animation: fadeIn 0.35s ease-out; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-glow { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+@keyframes lnin { to { opacity: 1; transform: none; } }
+.launch-line {
+  opacity: 0; transform: translateY(4px);
+  animation: lnin 0.25s forwards;
+}
+
+/* ─── Microscope Hero Cell Animations ──────────────────────── */
+@keyframes cell-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.025, 1.07); }
+}
+@keyframes cell-wave {
+  from { transform: rotate(-8deg); }
+  to { transform: rotate(8deg); }
+}
+@keyframes cell-jitter {
+  0% { transform: translate(-0.3px, 0); }
+  50% { transform: translate(0.3px, 0.2px); }
+  100% { transform: translate(-0.15px, -0.2px); }
+}
+.animate-cell-breathe { animation: cell-breathe 1s ease-in-out infinite; }
+.animate-cell-wave { animation: cell-wave 1s ease-in-out infinite alternate; }
+.animate-cell-jitter { animation: cell-jitter 0.11s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-cell-breathe,
+  .animate-cell-wave,
+  .animate-cell-jitter { animation: none !important; }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+  .text-balance { text-wrap: balance; }
 }

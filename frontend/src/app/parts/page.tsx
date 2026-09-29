@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { Card } from '@/components/ui/card';
+import { Spinner, EmptyState } from '@/components/ui/loading';
 
 const API_BASE = 'http://localhost:8000/api/v1';
 
@@ -19,83 +21,63 @@ interface PartDetail extends Part {
 }
 
 const PART_TYPES = [
-  { key: null, label: 'All', icon: '📦' },
-  { key: 'promoter', label: 'Promoters', icon: '▶️' },
-  { key: 'rbs', label: 'RBS', icon: '🔵' },
-  { key: 'cds', label: 'CDS', icon: '🧬' },
-  { key: 'terminator', label: 'Terminators', icon: '⏹️' },
+  { key: null, label: 'All', icon: '\ud83d\udce6' },
+  { key: 'promoter', label: 'Promoters', icon: '\u25b6\ufe0f' },
+  { key: 'rbs', label: 'RBS', icon: '\ud83d\udfe2' },
+  { key: 'cds', label: 'CDS', icon: '\ud83e\uddec' },
+  { key: 'terminator', label: 'Terminators', icon: '\u23f9\ufe0f' },
 ];
 
 export default function PartsPage() {
   const [parts, setParts] = useState<Part[]>([]);
-  const [total, setTotal] = useState(0);
-  const [selectedType, setSelectedType] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [selectedPart, setSelectedPart] = useState<PartDetail | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<PartDetail | null>(null);
 
-  const loadParts = async (type: string | null = selectedType, searchTerm: string = search) => {
+  useEffect(() => { loadParts(); }, [typeFilter]);
+
+  const loadParts = async () => {
+    setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (type) params.set('part_type', type);
-      if (searchTerm) params.set('search', searchTerm);
-      params.set('limit', '50');
-
-      const res = await fetch(`${API_BASE}/parts?${params.toString()}`);
-      const data = await res.json();
-      setParts(data.parts);
-      setTotal(data.total);
+      const url = new URL(`${API_BASE}/parts`);
+      if (typeFilter) url.searchParams.set('part_type', typeFilter);
+      if (search) url.searchParams.set('search', search);
+      const res = await fetch(url.toString());
+      if (res.ok) {
+        const data = await res.json();
+        setParts(Array.isArray(data) ? data : data.parts || []);
+      }
     } catch (e) { console.error(e); }
+    setLoading(false);
   };
 
-  const loadPartDetail = async (name: string) => {
+  const loadDetail = async (name: string) => {
     try {
       const res = await fetch(`${API_BASE}/parts/${encodeURIComponent(name)}`);
-      if (res.ok) setSelectedPart(await res.json());
+      if (res.ok) setSelected(await res.json());
     } catch (e) { console.error(e); }
   };
 
-  useEffect(() => {
-    // Initial load — fetch all parts
-    const init = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/parts?limit=50`);
-        const data = await res.json();
-        setParts(data.parts);
-        setTotal(data.total);
-      } catch (e) { console.error(e); }
-    };
-    init();
-  }, []);
-
-  const strengthBar = (strength: number | null) => {
-    if (strength === null || strength === undefined) return null;
-    return (
-      <div className="flex items-center gap-2">
-        <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-green-500 rounded-full"
-            style={{ width: `${Math.min(strength * 100, 100)}%` }}
-          />
-        </div>
-        <span className="text-xs text-gray-400">{(strength * 100).toFixed(0)}%</span>
-      </div>
-    );
-  };
+  const filtered = parts.filter(p =>
+    !search || p.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Parts Library</h1>
+    <div className="max-w-5xl page-enter">
+      <h1 className="text-3xl font-semibold text-[#eaffff] mb-1 glow-text">Parts Library</h1>
+      <p className="text-sm text-[#8cc3d4] mb-6">Browse characterized genetic parts from iGEM Registry</p>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      {/* Type filter tabs */}
+      <div className="flex gap-2 mb-5 flex-wrap">
         {PART_TYPES.map((t) => (
           <button
             key={t.label}
-            onClick={() => { setSelectedType(t.key); loadParts(t.key, search); }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              selectedType === t.key
-                ? 'bg-green-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            onClick={() => setTypeFilter(t.key)}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all border ${
+              typeFilter === t.key
+                ? 'bg-[#3ef2ff]/15 text-[#7dffef] border-[#3ef2ff]/40'
+                : 'bg-white/[0.04] text-[#8cc3d4] border-white/10 hover:bg-white/[0.07] hover:text-[#d9f7ff]'
             }`}
           >
             {t.icon} {t.label}
@@ -104,95 +86,128 @@ export default function PartsPage() {
       </div>
 
       {/* Search */}
-      <div className="flex gap-3 mb-4">
+      <div className="flex gap-3 mb-5">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && loadParts(selectedType, search)}
-          placeholder="Search parts by name (e.g., BBa_J23100)"
-          className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-500"
+          onKeyDown={(e) => e.key === 'Enter' && loadParts()}
+          placeholder="Search parts by name..."
+          className="flex-1 px-4 py-2.5 rounded-xl bg-[#01070c]/60 border border-white/10 text-[#eaffff] text-sm placeholder-[#5c8494] focus:outline-none focus:border-[#3ef2ff]/60 transition-colors"
         />
-        <button
-          onClick={() => loadParts(selectedType, search)}
-          className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-        >
-          Search
+        <button onClick={loadParts} disabled={loading}
+          className="px-5 py-2 rounded-full bg-[#3ef2ff]/15 text-[#7dffef] border border-[#3ef2ff]/40 text-sm font-medium hover:bg-[#3ef2ff]/25 transition-all disabled:opacity-50 shadow-[0_0_16px_-4px_rgba(62,242,255,0.3)]">
+          {loading ? 'Loading...' : 'Search'}
         </button>
       </div>
 
-      {/* Parts Table */}
-      <div className="bg-gray-800 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-700">
-            <tr>
-              <th className="px-4 py-3 text-left">Name</th>
-              <th className="px-4 py-3 text-left">Type</th>
-              <th className="px-4 py-3 text-left">Source</th>
-              <th className="px-4 py-3 text-right">Length (bp)</th>
-              <th className="px-4 py-3 text-left">Strength</th>
-              <th className="px-4 py-3 text-left">Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            {parts.map((p) => (
-              <tr
-                key={p.id}
-                onClick={() => loadPartDetail(p.name)}
-                className="border-t border-gray-700 hover:bg-gray-700 cursor-pointer"
-              >
-                <td className="px-4 py-2 font-mono text-green-400 font-medium">{p.name}</td>
-                <td className="px-4 py-2">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    p.part_type === 'promoter' ? 'bg-blue-900 text-blue-300' :
-                    p.part_type === 'rbs' ? 'bg-purple-900 text-purple-300' :
-                    p.part_type === 'cds' ? 'bg-orange-900 text-orange-300' :
-                    'bg-red-900 text-red-300'
-                  }`}>
-                    {p.part_type.toUpperCase()}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-gray-300">{p.source || '—'}</td>
-                <td className="px-4 py-2 text-right">{p.sequence_length || '—'}</td>
-                <td className="px-4 py-2">{strengthBar(p.strength)}</td>
-                <td className="px-4 py-2 text-gray-400 text-xs">
-                  {p.annotations?.inducer && `Inducer: ${p.annotations.inducer}`}
-                  {p.annotations?.RPU !== undefined && `RPU: ${p.annotations.RPU}`}
-                  {p.annotations?.protein && `Protein: ${p.annotations.protein}`}
-                  {p.annotations?.efficiency !== undefined && `Eff: ${(Number(p.annotations.efficiency) * 100).toFixed(0)}%`}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="px-4 py-2 bg-gray-700 text-sm text-gray-400">
-          {total} parts total — showing {parts.length}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Table */}
+        <div className="lg:col-span-2">
+          <Card className="overflow-hidden">
+            {loading ? (
+              <div className="py-8"><Spinner /></div>
+            ) : filtered.length === 0 ? (
+              <EmptyState icon="\ud83d\udce6" title="No parts found" description="Try a different search or filter." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[#8cc3d4] text-xs">
+                      <th className="text-left p-3 font-medium uppercase tracking-wider">Name</th>
+                      <th className="text-left p-3 font-medium uppercase tracking-wider">Type</th>
+                      <th className="text-right p-3 font-medium uppercase tracking-wider">Length (bp)</th>
+                      <th className="text-left p-3 font-medium uppercase tracking-wider">Source</th>
+                      <th className="text-left p-3 font-medium uppercase tracking-wider">Strength</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((p) => (
+                      <tr key={p.id} onClick={() => loadDetail(p.name)}
+                        className={`border-b border-white/[0.06] cursor-pointer transition-colors hover:bg-white/[0.04] ${
+                          selected?.id === p.id ? 'bg-[#3ef2ff]/[0.07] shadow-[inset_2px_0_0_0_#3ef2ff]' : ''
+                        }`}>
+                        <td className="p-3 text-[#3ef2ff] font-medium">{p.name}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 text-[11px] rounded-full border border-[#3ef2ff]/20 bg-[#3ef2ff]/[0.06] text-[#7dffef]">
+                            {p.part_type}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right text-[#8cc3d4] font-mono-readout">{p.sequence_length?.toLocaleString() || '—'}</td>
+                        <td className="p-3 text-[#5c8494] text-xs">{p.source || '—'}</td>
+                        <td className="p-3">
+                          {p.strength != null ? (
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
+                                <div className="h-full bg-[#3ef2ff] rounded-full" style={{ width: `${Math.min(p.strength * 100, 100)}%` }} />
+                              </div>
+                              <span className="text-xs text-[#8cc3d4] font-mono-readout w-8 text-right">{(p.strength * 100).toFixed(0)}%</span>
+                            </div>
+                          ) : <span className="text-[#5c8494]">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="px-4 py-2 border-t border-white/[0.06] text-xs text-[#5c8494]">
+                  {filtered.length} parts
+                </div>
+              </div>
+            )}
+          </Card>
         </div>
-      </div>
 
-      {/* Part Detail Modal */}
-      {selectedPart && (
-        <div className="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-lg font-bold text-green-400">{selectedPart.name}</h3>
-            <button onClick={() => setSelectedPart(null)} className="text-gray-400 hover:text-white">✕</button>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm mb-3">
-            <div><span className="text-gray-400">Type:</span> {selectedPart.part_type}</div>
-            <div><span className="text-gray-400">Source:</span> {selectedPart.source}</div>
-            <div><span className="text-gray-400">Length:</span> {selectedPart.sequence_length ? `${selectedPart.sequence_length} bp` : 'N/A'}</div>
-            <div><span className="text-gray-400">Strength:</span> {selectedPart.strength !== null ? `${(selectedPart.strength * 100).toFixed(0)}%` : 'N/A'}</div>
-          </div>
-          {selectedPart.sequence && selectedPart.sequence !== 'N/A' && (
-            <div>
-              <p className="text-gray-400 text-xs mb-1">Sequence:</p>
-              <pre className="bg-gray-900 p-3 rounded font-mono text-xs text-green-300 break-all whitespace-pre-wrap">
-                {selectedPart.sequence}
-              </pre>
-            </div>
+        {/* Detail panel */}
+        <div>
+          {selected ? (
+            <Card className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-[#3ef2ff]">{selected.name}</h3>
+                <button onClick={() => setSelected(null)} className="text-[#5c8494] hover:text-white transition-colors">\u2715</button>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between py-1.5 border-b border-white/[0.06]">
+                  <span className="text-[#8cc3d4]">Type</span>
+                  <span className="text-[#eaffff]">{selected.part_type}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-white/[0.06]">
+                  <span className="text-[#8cc3d4]">Length</span>
+                  <span className="text-[#eaffff] font-mono-readout">{selected.sequence_length?.toLocaleString()} bp</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-white/[0.06]">
+                  <span className="text-[#8cc3d4]">Source</span>
+                  <span className="text-[#eaffff]">{selected.source || '\u2014'}</span>
+                </div>
+                {selected.registry_id && (
+                  <div className="flex justify-between py-1.5 border-b border-white/[0.06]">
+                    <span className="text-[#8cc3d4]">Registry ID</span>
+                    <span className="text-[#3ef2ff] font-mono-readout">{selected.registry_id}</span>
+                  </div>
+                )}
+                {selected.strength != null && (
+                  <div className="flex justify-between py-1.5 border-b border-white/[0.06]">
+                    <span className="text-[#8cc3d4]">Strength</span>
+                    <span className="text-[#eaffff] font-mono-readout">{(selected.strength * 100).toFixed(0)}%</span>
+                  </div>
+                )}
+              </div>
+              {selected.sequence && (
+                <div className="mt-4">
+                  <div className="text-xs text-[#8cc3d4] mb-2">Sequence</div>
+                  <div className="p-3 rounded-lg bg-[#01070c]/60 border border-white/[0.08] text-[10px] text-[#7dffef] font-mono-readout break-all max-h-40 overflow-auto leading-relaxed">
+                    {selected.sequence}
+                  </div>
+                </div>
+              )}
+            </Card>
+          ) : (
+            <Card className="p-8 text-center border-dashed">
+              <div className="text-3xl mb-3 opacity-30">\ud83e\uddec</div>
+              <p className="text-sm text-[#5c8494]">Click a part to view details</p>
+            </Card>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
