@@ -2,6 +2,12 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Spinner, EmptyState } from '@/components/ui/loading';
+import {
+  ReferenceDetailPanel,
+  DetailEmptyState,
+  ResultCount,
+} from '@/components/reference/detail-panel';
+import { getPartFields } from '@/components/reference/field-config';
 
 const API_BASE = 'http://localhost:8000/api/v1';
 
@@ -21,12 +27,18 @@ interface PartDetail extends Part {
 }
 
 const PART_TYPES = [
-  { key: null, label: 'All', icon: '\ud83d\udce6' },
-  { key: 'promoter', label: 'Promoters', icon: '\u25b6\ufe0f' },
-  { key: 'rbs', label: 'RBS', icon: '\ud83d\udfe2' },
-  { key: 'cds', label: 'CDS', icon: '\ud83e\uddec' },
-  { key: 'terminator', label: 'Terminators', icon: '\u23f9\ufe0f' },
+  { key: null, label: 'All', icon: '📦' },
+  { key: 'promoter', label: 'Promoters', icon: '▶️' },
+  { key: 'rbs', label: 'RBS', icon: '🟢' },
+  { key: 'cds', label: 'CDS', icon: '🧬' },
+  { key: 'terminator', label: 'Terminators', icon: '⏹️' },
 ];
+
+/** Treat "N/A" as missing for display purposes */
+function realSequence(seq: string | null): string | null {
+  if (!seq || seq.toUpperCase() === 'N/A') return null;
+  return seq;
+}
 
 export default function PartsPage() {
   const [parts, setParts] = useState<Part[]>([]);
@@ -35,7 +47,7 @@ export default function PartsPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<PartDetail | null>(null);
 
-  useEffect(() => { loadParts(); }, [typeFilter]);
+  useEffect(() => { loadParts(); }, [typeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadParts = async () => {
     setLoading(true);
@@ -108,7 +120,7 @@ export default function PartsPage() {
             {loading ? (
               <div className="py-8"><Spinner /></div>
             ) : filtered.length === 0 ? (
-              <EmptyState icon="\ud83d\udce6" title="No parts found" description="Try a different search or filter." />
+              <EmptyState icon="📦" title="No parts found" description="Try a different search or filter." />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -133,25 +145,31 @@ export default function PartsPage() {
                             {p.part_type}
                           </span>
                         </td>
-                        <td className="p-3 text-right text-[#8cc3d4] font-mono-readout">{p.sequence_length?.toLocaleString() || '—'}</td>
-                        <td className="p-3 text-[#5c8494] text-xs">{p.source || '—'}</td>
+                        <td className="p-3 text-right font-mono-readout">
+                          {p.sequence_length != null
+                            ? <span className="text-[#8cc3d4]">{p.sequence_length.toLocaleString()}</span>
+                            : <span className="text-[#5c8494] text-xs italic">pending</span>}
+                        </td>
+                        <td className="p-3 text-[#5c8494] text-xs">
+                          {p.source || <span className="italic">pending</span>}
+                        </td>
                         <td className="p-3">
-                          {p.strength != null ? (
+                          {p.part_type === 'cds' ? (
+                            <span className="text-[#5c8494] text-xs italic">n/a</span>
+                          ) : p.strength != null ? (
                             <div className="flex items-center gap-2">
                               <div className="flex-1 h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
                                 <div className="h-full bg-[#3ef2ff] rounded-full" style={{ width: `${Math.min(p.strength * 100, 100)}%` }} />
                               </div>
                               <span className="text-xs text-[#8cc3d4] font-mono-readout w-8 text-right">{(p.strength * 100).toFixed(0)}%</span>
                             </div>
-                          ) : <span className="text-[#5c8494]">—</span>}
+                          ) : <span className="text-[#5c8494] text-xs italic">pending</span>}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <div className="px-4 py-2 border-t border-white/[0.06] text-xs text-[#5c8494]">
-                  {filtered.length} parts
-                </div>
+                <ResultCount>{filtered.length} parts</ResultCount>
               </div>
             )}
           </Card>
@@ -160,51 +178,32 @@ export default function PartsPage() {
         {/* Detail panel */}
         <div>
           {selected ? (
-            <Card className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold text-[#3ef2ff]">{selected.name}</h3>
-                <button onClick={() => setSelected(null)} className="text-[#5c8494] hover:text-white transition-colors">\u2715</button>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between py-1.5 border-b border-white/[0.06]">
-                  <span className="text-[#8cc3d4]">Type</span>
-                  <span className="text-[#eaffff]">{selected.part_type}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/[0.06]">
-                  <span className="text-[#8cc3d4]">Length</span>
-                  <span className="text-[#eaffff] font-mono-readout">{selected.sequence_length?.toLocaleString()} bp</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/[0.06]">
-                  <span className="text-[#8cc3d4]">Source</span>
-                  <span className="text-[#eaffff]">{selected.source || '\u2014'}</span>
-                </div>
-                {selected.registry_id && (
-                  <div className="flex justify-between py-1.5 border-b border-white/[0.06]">
-                    <span className="text-[#8cc3d4]">Registry ID</span>
-                    <span className="text-[#3ef2ff] font-mono-readout">{selected.registry_id}</span>
-                  </div>
-                )}
-                {selected.strength != null && (
-                  <div className="flex justify-between py-1.5 border-b border-white/[0.06]">
-                    <span className="text-[#8cc3d4]">Strength</span>
-                    <span className="text-[#eaffff] font-mono-readout">{(selected.strength * 100).toFixed(0)}%</span>
-                  </div>
-                )}
-              </div>
-              {selected.sequence && (
+            <ReferenceDetailPanel
+              title={selected.name}
+              fields={getPartFields(selected)}
+              onClose={() => setSelected(null)}
+            >
+              {/* Sequence block */}
+              {realSequence(selected.sequence) ? (
                 <div className="mt-4">
                   <div className="text-xs text-[#8cc3d4] mb-2">Sequence</div>
                   <div className="p-3 rounded-lg bg-[#01070c]/60 border border-white/[0.08] text-[10px] text-[#7dffef] font-mono-readout break-all max-h-40 overflow-auto leading-relaxed">
                     {selected.sequence}
                   </div>
                 </div>
+              ) : (
+                <div className="mt-4">
+                  <div className="text-xs text-[#8cc3d4] mb-2">Sequence</div>
+                  <div className="p-3 rounded-lg bg-[#01070c]/60 border border-white/[0.08] text-xs">
+                    <span className="inline-flex px-2 py-0.5 text-[10px] rounded-full bg-white/[0.05] text-[#5c8494] border border-white/10">
+                      Not yet catalogued
+                    </span>
+                  </div>
+                </div>
               )}
-            </Card>
+            </ReferenceDetailPanel>
           ) : (
-            <Card className="p-8 text-center border-dashed">
-              <div className="text-3xl mb-3 opacity-30">\ud83e\uddec</div>
-              <p className="text-sm text-[#5c8494]">Click a part to view details</p>
-            </Card>
+            <DetailEmptyState icon="🧬" text="Click a part to view details" />
           )}
         </div>
       </div>

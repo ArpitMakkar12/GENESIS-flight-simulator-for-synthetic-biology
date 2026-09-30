@@ -38,6 +38,31 @@ class TFResponse(BaseModel):
     sensing_signal: Optional[str] = None
     active_form: Optional[str] = None
     active_conditions: Optional[dict] = None
+    regulated_gene_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class RegulatedGeneResponse(BaseModel):
+    gene_locus_tag: str
+    gene_name: Optional[str] = None
+    regulation_type: str
+    confidence_score: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TFDetailResponse(BaseModel):
+    id: UUID
+    name: str
+    tf_family: Optional[str] = None
+    sensing_signal: Optional[str] = None
+    active_form: Optional[str] = None
+    active_conditions: Optional[dict] = None
+    regulated_gene_count: int = 0
+    regulated_genes: list[RegulatedGeneResponse] = []
 
     class Config:
         from_attributes = True
@@ -47,3 +72,4 @@ class PathwayResponse(BaseModel):
     subsystem: str
     reaction_count: int
     reactions: list[ReactionResponse]
+

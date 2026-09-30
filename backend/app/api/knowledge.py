@@ -7,7 +7,10 @@ from app.database import get_db
 from app.models.gene import Gene
 from app.models.reaction import Reaction
 from app.models.regulation import TranscriptionFactor, GeneRegulation
-from app.schemas.knowledge import GeneResponse, TFResponse, PathwayResponse, ReactionResponse
+from app.schemas.knowledge import (
+    GeneResponse, TFResponse, TFDetailResponse, RegulatedGeneResponse,
+    PathwayResponse, ReactionResponse,
+)
 
 router = APIRouter()
 
@@ -59,18 +62,88 @@ async def list_transcription_factors(
     condition: Optional[str] = Query(None, description="Filter by active condition key (e.g., 'oxygen', 'carbon_source')"),
     db: AsyncSession = Depends(get_db),
 ):
-    """List transcription factors, optionally filtered by active condition."""
-    query = select(TranscriptionFactor)
+    """List transcription factors with regulated gene counts."""
+    # Subquery: count of DISTINCT regulated genes per TF
+    reg_count_sub = (
+        select(
+            GeneRegulation.tf_id,
+            func.count(func.distinct(GeneRegulation.gene_id)).label("reg_count"),
+        )
+        .group_by(GeneRegulation.tf_id)
+        .subquery()
+    )
+
+    query = (
+        select(
+            TranscriptionFactor,
+            func.coalesce(reg_count_sub.c.reg_count, 0).label("regulated_gene_count"),
+        )
+        .outerjoin(reg_count_sub, TranscriptionFactor.id == reg_count_sub.c.tf_id)
+    )
 
     if condition:
-        # Filter TFs whose active_conditions JSONB contains the given key
         query = query.where(
             TranscriptionFactor.active_conditions.has_key(condition)
         )
 
     query = query.order_by(TranscriptionFactor.name)
     result = await db.execute(query)
-    return result.scalars().all()
+    rows = result.all()
+
+    return [
+        TFResponse(
+            id=tf.id,
+            name=tf.name,
+            tf_family=tf.tf_family,
+            sensing_signal=tf.sensing_signal,
+            active_form=tf.active_form,
+            active_conditions=tf.active_conditions,
+            regulated_gene_count=reg_count,
+        )
+        for tf, reg_count in rows
+    ]
+
+
+@router.get("/tfs/{tf_name}", response_model=TFDetailResponse)
+async def get_transcription_factor(
+    tf_name: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get TF detail with its regulated genes."""
+    result = await db.execute(
+        select(TranscriptionFactor).where(TranscriptionFactor.name == tf_name)
+    )
+    tf = result.scalar_one_or_none()
+    if not tf:
+        raise HTTPException(status_code=404, detail=f"Transcription factor '{tf_name}' not found")
+
+    # Fetch regulated genes with gene info
+    reg_result = await db.execute(
+        select(GeneRegulation, Gene)
+        .join(Gene, GeneRegulation.gene_id == Gene.id)
+        .where(GeneRegulation.tf_id == tf.id)
+        .order_by(Gene.locus_tag)
+    )
+    reg_rows = reg_result.all()
+
+    return TFDetailResponse(
+        id=tf.id,
+        name=tf.name,
+        tf_family=tf.tf_family,
+        sensing_signal=tf.sensing_signal,
+        active_form=tf.active_form,
+        active_conditions=tf.active_conditions,
+        regulated_gene_count=len(reg_rows),
+        regulated_genes=[
+            RegulatedGeneResponse(
+                gene_locus_tag=gene.locus_tag,
+                gene_name=gene.name,
+                regulation_type=reg.regulation_type,
+                confidence_score=reg.confidence_score,
+            )
+            for reg, gene in reg_rows
+        ],
+    )
 
 
 @router.get("/pathways", response_model=list[dict])
