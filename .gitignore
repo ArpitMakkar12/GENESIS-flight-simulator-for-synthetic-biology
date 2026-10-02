@@ -55,3 +55,6 @@ htmlcov/
 
 # Local docker overrides (per-machine ports etc.)
 docker-compose.override.yml
+
+# Temporary local debugging scripts
+_debug_*.py
