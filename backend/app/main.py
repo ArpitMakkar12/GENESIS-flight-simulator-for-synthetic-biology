@@ -9,8 +9,17 @@ from app.api import simulate, constructs, parts, knowledge, results
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
-    # Startup: load ML models, verify DB connection
+    # Startup: preload the AI predictor so the first simulation is fast
     print("BioSandbox API starting up...")
+    try:
+        from app.services.simulation_runner import SimulationRunner
+        runner = SimulationRunner()
+        predictor = runner._get_predictor()
+        status = predictor.load_models(include_hyenadna=False)
+        print(f"  AI predictor loaded: {status.get('genes', 0)} genes, "
+              f"expression_model={status.get('expression', False)}")
+    except Exception as e:
+        print(f"  AI predictor preload failed (non-fatal): {e}")
     yield
     # Shutdown: cleanup resources
     print("BioSandbox API shutting down...")

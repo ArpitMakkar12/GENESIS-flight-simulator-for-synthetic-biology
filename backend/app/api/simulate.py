@@ -59,6 +59,9 @@ async def run_simulation(
                 gene_id=p["gene_id"],
                 relative_expression=p["relative_expression"],
                 confidence=p["confidence"],
+                prediction_source=p.get("prediction_source"),
+                rbs_score=p.get("rbs_score"),
+                reference_tpm=p.get("reference_tpm"),
             )
             for p in result["expression_predictions"]
         ]
@@ -97,9 +100,13 @@ async def run_simulation(
         doubling_time=result.get("doubling_time"),
         viability_score=result.get("viability_score"),
         expression_predictions=expression_out,
+        expression_summary=result.get("expression_summary"),
+        flux_summary=result.get("flux_summary"),
         active_pathways=result.get("active_pathways"),
+        active_tfs=result.get("active_tfs"),
         bottlenecks=result.get("bottlenecks"),
         model_versions={"predictor": result.get("model_version", "unknown")},
+        conditions=result.get("conditions"),
         computed_at=completed_at,
         compute_time_ms=result.get("compute_time_ms"),
     )

@@ -68,9 +68,30 @@ class SimulationRunner:
 
         # ── Step 2: Prepare prediction input ──
         if gene_ids is None or gene_sequences is None:
-            # Default: use a representative set of iML1515 genes
-            gene_ids = gene_ids or ["b0002", "b0344", "b3702"]
-            gene_sequences = gene_sequences or ["ATGC" * 200] * len(gene_ids)
+            # Query all genes that are (a) linked to metabolic reactions and
+            # (b) have measured expression. This lets the AI layer constrain
+            # most of the metabolic model instead of just 3 reactions.
+            # Empty sequences are deliberate — every one of these genes is
+            # known, so the predictor resolves them by ID (lookup path,
+            # sub-millisecond) and never reads the DNA.
+            from sqlalchemy import create_engine, text as sa_text
+            from app.config import settings as app_settings
+
+            engine = create_engine(app_settings.DATABASE_URL_SYNC)
+            with engine.connect() as conn:
+                rows = conn.execute(sa_text(
+                    "SELECT DISTINCT g.locus_tag FROM genes g "
+                    "JOIN enzyme_reactions er ON er.gene_id = g.id "
+                    "WHERE g.reference_expression_tpm IS NOT NULL"
+                )).fetchall()
+
+            if rows:
+                gene_ids = [r[0] for r in rows]
+                gene_sequences = [""] * len(gene_ids)
+            else:
+                # Fallback: if the join table is empty, use minimal set
+                gene_ids = ["b0002", "b0344", "b3702"]
+                gene_sequences = [""] * len(gene_ids)
 
         prediction_input = PredictionInput(
             gene_ids=gene_ids,
@@ -111,6 +132,27 @@ class SimulationRunner:
         if fba_result.growth_rate > 0:
             doubling_time = math.log(2) / fba_result.growth_rate  # hours
 
+        # Build full expression list for persistence, but limit API response
+        # to the top 50 most-changed genes to keep responses lean
+        all_predictions = [
+            {
+                "gene_id": r.gene_id,
+                "relative_expression": r.relative_expression,
+                "confidence": r.confidence,
+                "prediction_source": r.prediction_source,
+                "rbs_score": r.rbs_score,
+                "reference_tpm": r.reference_expression_tpm,
+            }
+            for r in prediction_output.results
+        ]
+
+        # Sort by how much expression deviates from 1.0 (most interesting first)
+        top_predictions = sorted(
+            all_predictions,
+            key=lambda p: abs(p["relative_expression"] - 1.0),
+            reverse=True,
+        )[:50]
+
         return {
             "status": fba_result.status,
             "growth_rate": round(fba_result.growth_rate, 4),
@@ -118,16 +160,14 @@ class SimulationRunner:
             "viability_score": 1.0 if fba_result.growth_rate > 0.01 else 0.0,
             "active_pathways": fba_result.active_pathways,
             "bottlenecks": fba_result.bottlenecks,
-            "expression_predictions": [
-                {
-                    "gene_id": r.gene_id,
-                    "relative_expression": r.relative_expression,
-                    "confidence": r.confidence,
-                    "prediction_source": r.prediction_source,
-                    "reference_tpm": r.reference_expression_tpm,
-                }
-                for r in prediction_output.results
-            ],
+            "expression_predictions": top_predictions,
+            "expression_summary": {
+                "total_genes_evaluated": len(all_predictions),
+                "genes_with_changed_expression": sum(
+                    1 for p in all_predictions
+                    if abs(p["relative_expression"] - 1.0) > 0.01
+                ),
+            },
             "flux_summary": {
                 "total_reactions_with_flux": len(fba_result.flux_distribution),
                 "bounds_applied": len(bounds),
