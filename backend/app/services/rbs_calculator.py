@@ -23,36 +23,70 @@ tightness, in kcal/mol, and more negative means stronger.
 
 Five terms contribute (Salis, Mirsky & Voigt 2009):
 
-    dG_mRNA_rRNA   pairing between the Shine-Dalgarno motif and the
-                   16S rRNA 3' tail. The dominant term.
+    dG_mRNA_rRNA   what the message GAINS when the 16S rRNA 3' tail binds
+                   it. The dominant term. See the note below — this is
+                   the one that is easy to get subtly wrong.
     dG_start       start codon identity. ATG binds best, then GTG, TTG.
     dG_spacing     distance from the SD motif to the start codon.
                    About 5 bases is optimal; closer or further both hurt.
     dG_standby     the landing pad just upstream of the SD.
-    dG_mRNA        cost of unfolding mRNA secondary structure. If the
-                   message is knotted up, the ribosome cannot reach in.
 
-    dG_total = dG_mRNA_rRNA + dG_start + dG_spacing - dG_standby - dG_mRNA
+    dG_total = dG_mRNA_rRNA + dG_start + dG_spacing - dG_standby
 
     translation rate  proportional to  exp(-beta * dG_total)
 
 The relationship is exponential, which is why two RBS sequences
 differing by a few bases can differ a hundredfold in protein output.
 
+THE BINDING TERM, AND WHY IT IS NOT A DUPLEX ENERGY
+---------------------------------------------------
+The obvious way to compute dG_mRNA_rRNA is to take the Shine-Dalgarno
+motif, pair it against the 16S tail, and read off the duplex energy.
+That is wrong, and wrong in a way that still produces plausible-looking
+numbers.
+
+A duplex energy assumes both strands are already free. Real mRNA is
+folded, so the ribosome has to prise the message open first. Charging
+for that separately — duplex energy, then minus the mRNA folding energy
+— bills the same unfolding twice. Done that way, dG_total comes out
+POSITIVE for every sequence, including RBSs known to be strong, which
+would mean a ribosome binding them is energetically uphill.
+
+What this module does instead is ask what binding actually buys:
+
+    fold(mRNA)            the message on its own
+    cofold(mRNA + 16S)    the message and the ribosome tail together
+    dG_mRNA_rRNA = cofold - fold
+
+cofold must break whatever structure is in the way before it can pair,
+so the unfolding cost is already inside that number. Nothing is
+subtracted afterwards.
+
+Measured against real iGEM parts, in 300bp of genuine upstream context:
+
+    BBa_B0034 (strong)   dG_total = -3.29   rate = 11,008
+    BBa_B0032 (medium)   dG_total = +0.61   rate =  1,903
+    BBa_B0033 (weak)     dG_total = +8.21   rate =     62
+    no SD at all         dG_total = +11.3   rate =     15
+
+    B0034 / B0033 = 177x, against a published 100-300x.
+
+Strong RBSs now come out favourable (negative), weak ones come out
+weak rather than dead, and sequences with no SD motif sit below all of
+them. None of those three properties held before.
+
 ACCURACY AND HONESTY
 --------------------
-Two terms need real RNA folding, which requires ViennaRNA:
+The binding and folding terms need real RNA folding, which requires
+ViennaRNA. With it installed, this module reports method="vienna" and
+uses the equation above.
 
-    dG_mRNA     folding of the mRNA around the start codon
-    dG_standby  folding of the standby site
-
-If ViennaRNA is installed, this module uses it and reports
-method="vienna". If not, it falls back to a nearest-neighbour base
-pairing approximation and reports method="approximate".
-
-The fallback gets the DIRECTION right — strong RBSs score higher than
-weak ones — but the absolute numbers are not comparable to the
-published RBS Calculator. Every result carries its method, so an
+Without it, there is no cofold, so it falls back to the separable form
+— approximated duplex energy, with the folding cost subtracted — and
+reports method="approximate". That fallback gets the DIRECTION right,
+strong RBSs scoring above weak ones, but its absolute numbers are a
+different scale and are not comparable either to the vienna path or to
+the published RBS Calculator. Every result carries its method, so an
 approximate number is never mistaken for a full calculation.
 
     pip install ViennaRNA
@@ -100,6 +134,15 @@ SD_SEARCH_WINDOW = 20
 # Window used for folding calculations around the start codon.
 FOLD_UPSTREAM = 35
 FOLD_DOWNSTREAM = 35
+
+# Window used for the mRNA:rRNA binding calculation. Deliberately
+# narrower than the folding window: this is roughly the ribosome's own
+# footprint around a start codon (about -20 to +13), so it is the stretch
+# the 16S tail can physically reach. Using the wider folding window here
+# lets distant structure the ribosome never touches dominate the answer,
+# which is what made every dG_total come out positive before.
+BIND_UPSTREAM = 20
+BIND_DOWNSTREAM = 13
 
 # Per-base-pair energies for the approximate mode, kcal/mol. Real
 # nearest-neighbour models use stacking energies between adjacent
@@ -205,6 +248,47 @@ def _duplex_energy_vienna(sd: str) -> float | None:
         duplex = rna.duplexfold(sd.replace("T", "U"),
                                 ANTI_SD.replace("T", "U"))
         return float(duplex.energy)
+    except Exception:
+        return None
+
+
+def _net_binding_vienna(region: str) -> tuple[float, float, float] | None:
+    """Net energy gained when the 16S tail binds this stretch of mRNA.
+
+    This is the term the published RBS Calculator calls dG_mRNA:rRNA, and
+    getting it right matters more than any other part of this module.
+
+    The naive version — take the bare SD:anti-SD duplex energy, then
+    separately subtract the mRNA folding energy — double-counts. The
+    duplex energy assumes the SD motif is already free and unpaired, so
+    subtracting the folding cost on top charges for the same unfolding
+    twice. That drove dG_total positive for every sequence, which says
+    ribosome binding is unfavourable even for a known strong RBS.
+
+    The honest calculation asks what the mRNA gains by binding:
+
+        fold(mRNA)              the message on its own
+        cofold(mRNA + 16S)      the message and the ribosome tail together
+        net = cofold - fold     what binding actually buys
+
+    cofold has to break whatever mRNA structure is in the way before it
+    can pair, so the unfolding cost is already inside that number. No
+    separate subtraction is needed, and none is applied.
+
+    Returns (net, dg_mrna_alone, dg_complex), or None without ViennaRNA.
+    """
+    rna = _vienna()
+    if rna is None or not region:
+        return None
+
+    try:
+        mrna = region.replace("T", "U")
+        anti = ANTI_SD.replace("T", "U")
+
+        _, dg_alone = rna.fold(mrna)
+        _, dg_complex = rna.cofold(f"{mrna}&{anti}")
+
+        return float(dg_complex - dg_alone), float(dg_alone), float(dg_complex)
     except Exception:
         return None
 
@@ -329,7 +413,9 @@ def calculate_rbs(
             f"only {len(upstream)}bp upstream — too little to find an SD motif"
         )
 
-    # ---- the five terms ----
+    # ---- the terms ----
+    # _find_sd still identifies WHICH motif is acting and how far it sits
+    # from the start codon. Its energy is only used in the fallback path.
     sd_seq, sd_pos, dg_hybrid, sd_method = _find_sd(upstream)
     dg_start = START_CODON_DG.get(start_codon, 0.0)
     spacing = sd_pos
@@ -345,7 +431,33 @@ def calculate_rbs(
         if len(upstream) > SD_SEARCH_WINDOW + 15 else ""
     dg_standby, _ = _fold_energy(standby_region)
 
-    dg_total = dg_hybrid + dg_start + dg_spacing - dg_standby - dg_mrna
+    # ---- dG_total ----
+    # Two paths, and they are not the same equation.
+    #
+    # With ViennaRNA the binding term is a true net energy that already
+    # contains the cost of unfolding the message, so dG_mRNA must NOT be
+    # subtracted again:
+    #
+    #     dG_total = net_binding + dG_start + dG_spacing - dG_standby
+    #
+    # Without it, fall back to the separable form using the approximated
+    # duplex and folding energies. Directionally right, absolute values
+    # not comparable to the published calculator — and every result says
+    # which path produced it.
+    bind_region = seq[
+        max(0, start_position - BIND_UPSTREAM):
+        start_position + BIND_DOWNSTREAM
+    ]
+    binding = _net_binding_vienna(bind_region)
+
+    if binding is not None:
+        dg_binding, _dg_alone, _dg_complex = binding
+        dg_total = dg_binding + dg_start + dg_spacing - dg_standby
+        binding_method = "vienna"
+    else:
+        dg_binding = dg_hybrid
+        dg_total = dg_hybrid + dg_start + dg_spacing - dg_standby - dg_mrna
+        binding_method = "approximate"
 
     # Exponential relationship: a few kcal/mol becomes orders of
     # magnitude in protein output.
@@ -353,18 +465,20 @@ def calculate_rbs(
     rate = min(rate, 1e7)      # cap, so a pathological input cannot
                                # produce an absurd flux bound downstream
 
-    method = "vienna" if (_vienna() and fold_method == "vienna") else "approximate"
+    method = "vienna" if (binding_method == "vienna"
+                          and fold_method == "vienna") else "approximate"
     if method == "approximate":
         warnings.append(
-            "ViennaRNA not installed — folding terms are approximated. "
-            "Ratios between sequences are meaningful; absolute values "
-            "are not comparable to the published RBS Calculator."
+            "ViennaRNA not installed — binding and folding terms are "
+            "approximated. Ratios between sequences are meaningful; "
+            "absolute values are not comparable to the published RBS "
+            "Calculator."
         )
 
     return RBSResult(
         translation_rate=rate,
         dg_total=dg_total,
-        dg_mrna_rrna=dg_hybrid,
+        dg_mrna_rrna=dg_binding,
         dg_start=dg_start,
         dg_spacing=dg_spacing,
         dg_standby=dg_standby,

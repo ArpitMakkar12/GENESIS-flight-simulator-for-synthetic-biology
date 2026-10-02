@@ -77,16 +77,34 @@ Run `python ai/inference/predictor.py` to reproduce:
 
 | Condition | Gene | Fold | Correct? |
 |---|---|---|---|
-| Heat shock 42 °C | b0014 (dnaK) | **2.0x** | yes, heat shock protein |
-| Heat shock 42 °C | b4143 (groEL) | **2.0x** | yes, heat shock protein |
-| Lactose | b0344 (lacZ) | **2.0x** | yes, lactose digestion |
-| Anaerobic | b0720 | **0.5x** | yes, FNR/ArcA target |
+| Heat shock 42 °C | b0014 (dnaK) | **2.0x** | yes, heat shock chaperone |
+| Heat shock 42 °C | b4143 (groL) | **2.0x** | yes, heat shock chaperone |
+| Lactose | b0344 (lacZ) | **2.0x** | yes, digests lactose |
+| Lactose | b0720 (gltA) | **2.0x** | yes, CRP activates it off glucose |
+| Anaerobic | b0720 (gltA) | **0.5x** | yes, ArcA represses the TCA cycle |
 | Reference | all | 1.0x | yes, nothing changed |
 
-Each preset moves exactly the genes it biologically should.
+Each preset moves exactly the genes it biologically should, and leaves the
+rest at 1.0x.
 
-**Speed: 0.6 ms for a 5-gene construct.** Budget was 2,000 ms. Known genes
-never touch the neural network, which is why.
+**Speed: 34 ms for a 5-gene construct** (162 ms on the first call, which
+loads 4,351 genes and 3,394 regulator sets). Budget was 2,000 ms — 59x
+headroom. Known genes never touch the neural network, which is why.
+
+> The earlier draft said 0.6 ms. That was measured before RBS scoring was
+> wired in; ViennaRNA folding is what accounts for the difference. Still far
+> inside budget, and capped so it cannot escape — see §4.
+
+**One correction worth reading.** The `gltA` lactose row above is new. Until
+today `REFERENCE_TF_STATE` spelled the regulators `CRP` and `FNR`, while the
+TRN spells them `Crp` and `Fnr`, and both seeders insert into the same table —
+so the database held them as *separate transcription factors* and
+case-sensitive matching reached neither. **556 Crp edges and 323 Fnr edges
+were dead**, which is the master carbon-source regulator and the master
+oxygen regulator. The anaerobic preset had been running on ArcA alone.
+
+Now matched case-insensitively, with dedup so a gene carrying both spellings
+is not counted twice. **Environment-responsive genes: 951 → 1,293.**
 
 ---
 
@@ -144,28 +162,57 @@ measured; everything else is a lookup.
 `backend/app/services/rbs_calculator.py` — thermodynamic translation
 initiation rate, Salis 2009 method, using ViennaRNA for the folding terms.
 
-Validated against two real iGEM parts whose relative strength is already
-known:
+Validated against three real iGEM parts whose relative strength is already
+known, each embedded in 300bp of genuine upstream context — the same shape
+the contract specifies, not the part in isolation:
 
 ```
-BBa_B0034 (standard strong RBS)   54,336
-BBa_B0033 (weak sibling)             316
-                                 -> 172x ratio
+BBa_B0034 (strong)   dG = -3.29   rate = 11,008
+BBa_B0032 (medium)   dG = +0.61   rate =  1,903
+BBa_B0033 (weak)     dG = +8.21   rate =     62
+no SD motif at all   dG = +11.3   rate =     15
+                                  -> B0034/B0033 = 177x
 ```
 
 Published measurements put B0034 roughly two orders of magnitude above
-B0033. The calculator reproduced that from physics alone, having never seen
-either part's measured strength.
+B0033; 177x sits inside the reported 100-300x band. Reproduced from physics
+alone, having never seen either part's measured strength.
 
-Failure cases behave too: no SD motif scores 4, a GC-rich folded sequence
-scores 1. A ribosome genuinely cannot start there.
+**Corrected since the first draft of this document.** It previously reported
+54,336 vs 316 (172x). Two things were wrong with that. The numbers were
+measured on isolated parts rather than in sequence context, so they are not
+what the pipeline reports. And the energy model double-counted: it took the
+bare SD:anti-SD duplex energy and then separately subtracted the mRNA
+folding energy, but a duplex energy already assumes the motif is unpaired,
+so the unfolding cost was charged twice. Every dG_total came out positive,
+meaning a ribosome binding a known-strong RBS would be energetically
+uphill.
 
-Degrades gracefully — if ViennaRNA is missing it falls back to an
+The binding term is now a true net energy, `cofold(mRNA + 16S) - fold(mRNA)`,
+computed over the ribosome's own footprint (-20 to +13 around the start
+codon). cofold has to break existing structure before it can pair, so the
+unfolding cost is already inside that number and nothing is subtracted
+afterwards. Strong RBSs now come out favourable, and weak-but-functional
+ones read as weak rather than dead.
+
+**`rbs_score` is now populated on every result.** It was hardcoded `None`
+until today, so this module was orphaned — the contract declared the field
+"computed by AI layer" and nothing computed it. Genes passed with an empty
+sequence still return `None`, deliberately: there is no DNA to read, and an
+honest gap beats a fabricated number.
+
+Two performance notes, because each score costs ~5ms of ViennaRNA folding:
+
+- Results are cached on the sequence window, so a repeat is effectively free.
+- **Scoring is capped at 50 genes per request.** Past that, `rbs_score` is
+  `None` for all of them and the metadata says why. 1,500 genes would
+  otherwise take 7.9s against a 2s budget. This is why passing empty
+  sequences for known genes (§6.1) matters — it skips this path entirely.
+
+Degrades gracefully — if ViennaRNA is missing it falls back to the separable
 approximation and **says so in every result**, so an approximate number is
-never mistaken for a full calculation.
-
-Nothing currently consumes this. It is ready when you want translation
-efficiency in the pipeline.
+never mistaken for a full calculation. The fallback preserves ranking but
+its absolute scale differs from the vienna path.
 
 ---
 
