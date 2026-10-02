@@ -277,6 +277,38 @@ never touch the neural network.
 
 ---
 
+## 4b. The same thing, running through the full stack
+
+The trace above is the AI layer alone. Here it is end to end through the API,
+with the metabolic solver attached — four conditions, measured:
+
+| Condition | Growth /hr | Genes evaluated | Genes that moved | Flux bounds applied | ms |
+|---|---|---|---|---|---|
+| reference | 0.2883 | 1,514 | **0** | 2,229 | 458 |
+| anaerobic | 0.1036 | 1,514 | **242** | 2,229 | 843 |
+| heat shock | 0.5088 | 1,514 | **162** | 2,229 | 671 |
+| lactose | 0.5766 | 1,514 | **308** | 2,229 | 608 |
+
+**The three numbers that matter:**
+
+- **1,514 genes evaluated per simulation**, every one resolved by lookup
+  against measured RNA-seq. `prediction_source` is `lookup` for all of them —
+  nothing is guessed.
+- **2,229 of 2,712 reactions** get expression-derived flux bounds. The AI
+  layer constrains **82%** of the metabolic model.
+- **0 genes move at reference.** That is not a failure, it is the definition
+  of the reference state, and a system that moved genes there would be broken.
+
+**Lactose moving 308 genes is the headline.** It is the largest response of
+any condition, and it is CRP — 556 regulatory edges that were unreachable
+until today's fix (§7.3). Before it, lactose could only reach LacI's three
+genes.
+
+Response time stays between 458 and 843 ms against the 2,000 ms budget, with
+the whole metabolic solve included.
+
+---
+
 ## 5. What the system can do today — with the evidence
 
 | Capability | Evidence |
