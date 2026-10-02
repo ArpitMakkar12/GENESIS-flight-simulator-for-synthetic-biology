@@ -29,7 +29,7 @@ interface SimulationResult {
 
 /* ─── Constants ───────────────────────────────────────────── */
 
-const CARBON_OPTIONS = ["glucose", "lactose", "glycerol", "acetate", "succinate", "fructose", "galactose"];
+const CARBON_OPTIONS = ["glucose", "lactose", "glycerol", "acetate", "succinate", "fructose", "galactose", "arabinose", "xylose"];
 const NITROGEN_OPTIONS = ["ammonium", "glutamine", "nitrate"];
 const OXYGEN_OPTIONS = ["aerobic", "microaerobic", "anaerobic"];
 
