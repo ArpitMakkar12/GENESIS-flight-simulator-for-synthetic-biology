@@ -19,6 +19,9 @@ class GeneExpressionOut(BaseModel):
     gene_name: Optional[str] = None
     relative_expression: float
     confidence: float
+    prediction_source: Optional[str] = None     # "lookup", "model", or "fallback"
+    rbs_score: Optional[float] = None           # thermodynamic RBS score (0-1)
+    reference_tpm: Optional[float] = None       # absolute expression anchor (TPM)
 
 
 class ReactionFluxOut(BaseModel):
@@ -39,10 +42,14 @@ class SimulationResponse(BaseModel):
     viability_score: Optional[float] = None
     atp_balance: Optional[float] = None
     expression_predictions: Optional[list[GeneExpressionOut]] = None
+    expression_summary: Optional[dict] = None
     flux_distribution: Optional[list[ReactionFluxOut]] = None
+    flux_summary: Optional[dict] = None
     active_pathways: Optional[list[str]] = None
+    active_tfs: Optional[list[str]] = None
     bottlenecks: Optional[list[str]] = None
     model_versions: Optional[dict] = None
+    conditions: Optional[dict] = None
     computed_at: Optional[datetime] = None
     compute_time_ms: Optional[int] = None
 
