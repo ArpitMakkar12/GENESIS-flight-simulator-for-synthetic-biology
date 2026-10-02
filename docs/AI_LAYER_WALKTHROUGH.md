@@ -319,8 +319,8 @@ the whole metabolic solve included.
 | Predict expression for DNA nobody has measured | HyenaDNA + ensemble, held-out r = 0.378 on 866 unseen genes |
 | **Respond correctly to the environment** | 3,394 genes carry regulator sets; verified table below |
 | Score ribosome binding from physics alone | B0034 / B0033 = **177×** against a published 100–300× |
-| Drive the actual simulation | `verify_pipeline.py`: growth spans 0.0 → 0.877 across a 100,000× expression range; 2,229 of 2,712 reactions get expression-derived bounds |
-| Run inside the latency budget | 34 ms for 5 genes; worst case 262 ms at the 50-gene RBS cap |
+| Drive the actual simulation | measured end to end: 1,514 genes evaluated, **2,229 of 2,712 reactions (82%)** constrained by expression, growth spans 0.10 → 0.58 across conditions |
+| Run inside the latency budget | 458–843 ms through the full stack, solver included, against 2,000 ms |
 | Say how much to trust each answer | every result carries `confidence` + `prediction_source` |
 
 ### Verified biology — the table to show in the review
@@ -397,6 +397,51 @@ a repeated window is effectively free.
 **Baseline growth is conservative.** At reference conditions the simulator gives
 0.2883 while iML1515's own maximum is 0.877. A scaling constant in
 `bound_compiler.py` is probably too tight. Arpit's file.
+
+### The growth-direction problem — know this one cold
+
+Look again at the §4b table and something is wrong:
+
+```
+lactose      0.5766     faster than glucose
+heat shock   0.5088     faster than reference
+reference    0.2883
+anaerobic    0.1036
+```
+
+**Anaerobic is right.** Growth falls to 0.36× without oxygen, which is what
+should happen.
+
+**Lactose and heat shock are wrong, and we should say so first.** *E. coli*
+grows **faster** on glucose than lactose — catabolite repression exists
+precisely because glucose is preferred — and heat shock **slows** a cell down,
+it does not nearly double its growth rate.
+
+**Why it happens.** `bound_compiler.py` maps higher expression to looser flux
+bounds. Any condition that upregulates many genes therefore raises the growth
+ceiling, and growth ends up tracking *how many genes went up* rather than
+*whether the cell is actually better off*. Lactose moves the most genes (308),
+so lactose "wins".
+
+**What this does and does not invalidate.** The expression layer is not what
+is wrong here. Which genes respond, and in which direction, is correct and
+independently verified (§5). What is missing is that upregulating a gene has a
+**cost** — protein synthesis consumes carbon and ATP — and the model only ever
+sees the benefit. The carbon source's own energetics live in the exchange
+constraints, and they are not outweighing the bound-loosening.
+
+**The fix, for anyone who asks.** Two options, neither of them in the AI layer:
+
+1. Make the expression-to-bound mapping relative rather than absolute, so
+   upregulating everything is neutral instead of beneficial.
+2. Add a proteome-allocation constraint — a fixed enzyme budget that genes
+   compete for, as in ME-models. This is the principled fix and it is a
+   substantial piece of work.
+
+Stating this plainly is better than hoping nobody checks the ordering. The
+honest claim is: **we predict gene-level response correctly, and growth
+direction correctly only when the dominant effect is loss of capacity**
+(anaerobic), not when it is metabolic cost (lactose, heat shock).
 
 ---
 
