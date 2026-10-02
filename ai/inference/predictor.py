@@ -414,7 +414,15 @@ class EcoliExpressionPredictor:
         # See RBS_MAX_GENES. A genome-scale request skips RBS scoring rather
         # than spending 5ms per gene on a number it was not asking for.
         score_rbs = len(input_data.gene_ids) <= RBS_MAX_GENES
-        if not score_rbs:
+
+        # Only say so when it actually cost the caller something. The normal
+        # genome-scale path passes ~1,500 known genes with empty sequences,
+        # which have no RBS to score in the first place — warning there would
+        # put a misleading line on every single simulation. Warn only when
+        # real DNA was supplied and the cap is what stopped it being read.
+        if not score_rbs and any(
+            len(s or "") >= UPSTREAM_BP + 3 for s in input_data.gene_sequences
+        ):
             warnings.append(
                 f"{len(input_data.gene_ids)} genes requested, over the "
                 f"{RBS_MAX_GENES}-gene limit for RBS scoring — rbs_score is "
