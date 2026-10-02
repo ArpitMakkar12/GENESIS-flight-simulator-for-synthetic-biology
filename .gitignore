@@ -52,3 +52,6 @@ pgdata/
 # Coverage
 htmlcov/
 .coverage
+
+# Local docker overrides (per-machine ports etc.)
+docker-compose.override.yml
