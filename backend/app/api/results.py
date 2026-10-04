@@ -22,9 +22,13 @@ async def get_result(
     if not sim:
         raise HTTPException(status_code=404, detail=f"Simulation '{task_id}' not found")
 
+    fba = sim.fba_results or {}
     return {
         "id": str(sim.id),
         "status": sim.status,
+        "growth_state": fba.get("growth_state", sim.status),
+        "solver_status": fba.get("solver_status"),
+        "infeasibility_reason": fba.get("infeasibility_reason"),
         "temperature": sim.temperature,
         "ph": sim.ph,
         "oxygen_level": sim.oxygen_level,

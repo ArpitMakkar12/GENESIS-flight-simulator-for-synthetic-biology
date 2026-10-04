@@ -36,17 +36,22 @@ class SimulationResponse(BaseModel):
     model_config = {"protected_namespaces": (), "from_attributes": True}
 
     task_id: UUID
-    status: str
+    solver_status: Optional[str] = None          # FBA solver outcome: 'optimal', 'infeasible'
+    growth_state: Optional[str] = None           # human-readable: 'optimal', 'slowed', 'stressed', 'not-viable'
+    status: Optional[str] = None                 # kept for backwards compat (= solver_status)
     growth_rate: Optional[float] = None
     doubling_time: Optional[float] = None
     viability_score: Optional[float] = None
     atp_balance: Optional[float] = None
     expression_predictions: Optional[list[GeneExpressionOut]] = None
     expression_summary: Optional[dict] = None
-    flux_distribution: Optional[list[ReactionFluxOut]] = None
+    flux_distribution: Optional[dict] = None     # top 100 reactions: {rxn_id: flux_value}
     flux_summary: Optional[dict] = None
     active_pathways: Optional[list[str]] = None
     active_tfs: Optional[list[str]] = None
+    regulator_state: Optional[dict] = None       # master regulator -> active?
+    tf_state_changes: Optional[dict] = None      # regulators flipped vs reference
+    infeasibility_reason: Optional[str] = None   # set only when growth fails
     bottlenecks: Optional[list[str]] = None
     model_versions: Optional[dict] = None
     conditions: Optional[dict] = None

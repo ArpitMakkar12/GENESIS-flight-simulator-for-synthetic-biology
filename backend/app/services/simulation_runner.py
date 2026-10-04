@@ -14,9 +14,13 @@ from uuid import UUID
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from contracts.interfaces import PredictionInput, PredictionOutput
-from app.services.tf_resolver import TFResolver
+from app.services.tf_resolver import TFResolver, ENVIRONMENT_RULES
 from app.services.bound_compiler import BoundCompiler
 from app.services.fba_solver import FBASolver
+
+# Growth rate under the reference condition (37 C, pH 7, aerobic, glucose,
+# ammonium). growth_state is reported relative to this.
+REFERENCE_GROWTH_RATE = 0.2883
 
 
 class SimulationRunner:
@@ -146,34 +150,111 @@ class SimulationRunner:
             for r in prediction_output.results
         ]
 
-        # Sort by how much expression deviates from 1.0 (most interesting first)
-        top_predictions = sorted(
-            all_predictions,
-            key=lambda p: abs(p["relative_expression"] - 1.0),
-            reverse=True,
-        )[:50]
+        # B9: return the top up- and down-regulated genes separately, so
+        # repressed genes are not pushed out of the payload by induced ones.
+        # Ties within a fold tier are broken by reference_tpm (most
+        # abundant first), which surfaces the biologically loudest genes.
+        def _tpm(p: dict) -> float:
+            return p.get("reference_tpm") or 0.0
+
+        up_all = [p for p in all_predictions if p["relative_expression"] > 1.01]
+        down_all = [p for p in all_predictions if p["relative_expression"] < 0.99]
+
+        # Each direction gets at least 25 slots; unused slots go to the
+        # other direction so the total stays near 50.
+        n_up = max(25, 50 - min(25, len(down_all)))
+        n_down = max(25, 50 - min(25, len(up_all)))
+
+        upregulated = sorted(
+            up_all, key=lambda p: (-p["relative_expression"], -_tpm(p))
+        )[:n_up]
+        downregulated = sorted(
+            down_all, key=lambda p: (p["relative_expression"], -_tpm(p))
+        )[:n_down]
+        top_predictions = upregulated + downregulated
+
+        # B1: the solver status says whether FBA found a solution; it says
+        # nothing about how the cell is doing. growth_state is computed
+        # against the reference growth rate so the UI can show it directly.
+        growth_state = self._growth_state(fba_result.status, fba_result.growth_rate)
+
+        # V7: on an infeasible result, re-solve once without the GENESIS
+        # expression/kinetic bounds. Still infeasible -> the medium itself
+        # cannot support growth (biological). Feasible -> our constraints
+        # caused it. Only runs on failures, so it costs nothing normally.
+        infeasibility_reason = None
+        if fba_result.status != "optimal" or fba_result.growth_rate < 0.01:
+            unconstrained = self.fba_solver.solve(
+                bounds=[], exchange_constraints=exchange_constraints,
+            )
+            if unconstrained.status != "optimal" or unconstrained.growth_rate < 0.01:
+                infeasibility_reason = (
+                    "biological: the medium cannot support growth even without "
+                    "expression or kinetic constraints (e.g. no usable electron "
+                    "acceptor for this carbon source)"
+                )
+            else:
+                infeasibility_reason = (
+                    "constraint: growth is possible on this medium "
+                    f"({unconstrained.growth_rate:.4f} hr-1 unconstrained), so the "
+                    "expression/kinetic bounds applied by GENESIS caused the failure"
+                )
+
+        # B4: report the master regulators explicitly (the full active list
+        # is dominated by ~350 default-active TFs and truncating it hid CRP).
+        master = {name.lower(): name for name in ENVIRONMENT_RULES}
+        regulator_state = {
+            master[name.lower()]: state.is_active
+            for name, state in tf_states.items()
+            if name.lower() in master
+        }
+        meta = prediction_output.metadata or {}
+        active_masters = [n for n, on in regulator_state.items() if on]
+        others = [n for n in active_tfs if n.lower() not in master]
 
         return {
-            "status": fba_result.status,
+            "solver_status": fba_result.status,
+            "growth_state": growth_state,
+            "infeasibility_reason": infeasibility_reason,
             "growth_rate": round(fba_result.growth_rate, 4),
             "doubling_time": round(doubling_time, 2) if doubling_time else None,
-            "viability_score": 1.0 if fba_result.growth_rate > 0.01 else 0.0,
+            "viability_score": self._viability(fba_result.growth_rate, temperature),
             "active_pathways": fba_result.active_pathways,
             "bottlenecks": fba_result.bottlenecks,
             "expression_predictions": top_predictions,
+            # B5: changed-gene counts, split by direction
             "expression_summary": {
                 "total_genes_evaluated": len(all_predictions),
-                "genes_with_changed_expression": sum(
-                    1 for p in all_predictions
-                    if abs(p["relative_expression"] - 1.0) > 0.01
-                ),
+                "genes_with_changed_expression": len(up_all) + len(down_all),
+                "genes_up": len(up_all),
+                "genes_down": len(down_all),
+                "genes_by_source": meta.get("genes_by_source"),
+            },
+            # B3: flux values from the COBRApy solution (already filtered to
+            # |flux| > 1e-6 by the solver); top 150 by magnitude
+            "flux_distribution": {
+                rxn_id: round(flux, 6)
+                for rxn_id, flux in sorted(
+                    fba_result.flux_distribution.items(),
+                    key=lambda x: abs(x[1]),
+                    reverse=True,
+                )[:150]
             },
             "flux_summary": {
                 "total_reactions_with_flux": len(fba_result.flux_distribution),
                 "bounds_applied": len(bounds),
             },
-            "active_tfs": active_tfs[:20],
+            "active_tfs": active_masters + others[: max(0, 20 - len(active_masters))],
+            "regulator_state": regulator_state,
+            "tf_state_changes": meta.get("tf_state_changes", {}),
             "model_version": prediction_output.model_version,
+            # F5: every model in the pipeline, not just the predictor
+            "model_versions": {
+                "predictor": prediction_output.model_version,
+                "metabolic_model": "iML1515",
+                "solver": self.fba_solver.solver_name(),
+                "cobra": self.fba_solver.cobra_version(),
+            },
             "compute_time_ms": elapsed_ms,
             "conditions": {
                 "temperature": temperature,
@@ -183,6 +264,35 @@ class SimulationRunner:
                 "nitrogen_source": nitrogen_source,
             },
         }
+
+    @staticmethod
+    def _viability(growth_rate: float, temperature: float) -> float:
+        """Cell viability score [0-1].
+
+        Above ~46 °C E. coli K-12 loses viability rapidly even if FBA can
+        still find flux routes, so we drop the score with temperature.
+        """
+        if growth_rate < 0.01:
+            return 0.0
+        if temperature >= 50.0:
+            return 0.1
+        if temperature >= 48.0:
+            return 0.4
+        if temperature >= 46.0:
+            return 0.7
+        return 1.0
+
+    @staticmethod
+    def _growth_state(solver_status: str, growth_rate: float) -> str:
+        """Classify growth relative to the wild-type reference condition."""
+        if solver_status != "optimal" or growth_rate < 0.01:
+            return "not-viable"
+        ratio = growth_rate / REFERENCE_GROWTH_RATE
+        if ratio >= 0.9:
+            return "optimal"
+        if ratio >= 0.5:
+            return "slowed"
+        return "stressed"
 
     @staticmethod
     def _get_exchange_constraints(
@@ -215,6 +325,11 @@ class SimulationRunner:
         # Oxygen
         if oxygen_level == "aerobic":
             constraints["EX_o2_e"] = (-20.0, 1000.0)
+            # F2: pyruvate formate-lyase is irreversibly inactivated by O2
+            # (its glycyl radical is cleaved), so it carries no flux in
+            # aerobically growing cells. The solver applies this like any
+            # other bound because PFL is a model reaction.
+            constraints["PFL"] = (0.0, 0.0)
         elif oxygen_level == "microaerobic":
             constraints["EX_o2_e"] = (-2.0, 1000.0)
         elif oxygen_level == "anaerobic":

@@ -33,6 +33,20 @@ EXPRESSION_TO_FLUX_SCALE = 1e-4
 DEFAULT_LOWER = -1000.0
 DEFAULT_UPPER = 1000.0
 
+# P0 interim clamp (see "Simulation Test Report & Fix List", P0 item 2).
+# How much of an upregulation is allowed to loosen a flux bound, applied as
+#     effective = 1.0 + log2(relative_expression) * UPREGULATION_GAIN
+# 0.0 ignores upregulation entirely; 1.0 would be close to the old,
+# uncapped behaviour. Downregulation (< 1.0) is never damped.
+# Remove once the proteome-allocation constraint (P0 item 1) lands.
+UPREGULATION_GAIN = 0.0
+
+# P0 item 3: above this temperature activity collapses on top of the
+# Gaussian (factor e^-1 per HEAT_COLLAPSE_SCALE degrees). 46 °C is roughly
+# the upper growth limit of E. coli K-12.
+HEAT_COLLAPSE_C = 46.0
+HEAT_COLLAPSE_SCALE = 1.5
+
 
 class BoundCompiler:
     """Converts AI expression predictions + BRENDA kinetics into FBA reaction bounds.
@@ -95,8 +109,27 @@ class BoundCompiler:
 
         for result in expression_results:
             gene_id = result.gene_id
-            rel_expr = result.relative_expression
+            raw_expr = result.relative_expression
             ref_tpm = result.reference_expression_tpm or 100.0
+
+            # ── P0 FIX: Clamp the upside ──
+            # Downregulation (raw_expr < 1.0) tightens bounds as before —
+            # a repressed gene genuinely limits flux.
+            # Upregulation (raw_expr > 1.0) is dampened: the cell cannot
+            # benefit from producing more enzyme without paying a protein
+            # synthesis cost, which FBA does not model. Without this clamp,
+            # any condition that activates many genes (lactose, heat shock)
+            # loosens bounds and raises growth above reference, producing
+            # the paradox where a stressed cell outgrows a healthy one.
+            #
+            # The dampened form: 1.0 + log2(raw) * 0.1
+            # — a 2× upregulation adds only 10% capacity
+            # — a 4× upregulation adds only 20% capacity
+            # — downregulation below 1.0 is unchanged
+            if raw_expr <= 1.0:
+                rel_expr = raw_expr
+            else:
+                rel_expr = 1.0 + math.log2(raw_expr) * UPREGULATION_GAIN
 
             # Find reactions catalyzed by this gene
             reactions = self._gene_reaction_map.get(gene_id, [])
@@ -125,12 +158,18 @@ class BoundCompiler:
                     flux_max = DEFAULT_UPPER * rel_expr
                     source = "expression"
 
-                # Keep the tightest bound if multiple genes map to same reaction
+                # Keep the tightest bound if multiple genes map to same reaction.
+                # V3 note: for isozymes (e.g. ACONTb <- acnA OR acnB) this means
+                # the LOWER-expressed gene sets the cap (acnA, 178 TPM, rather
+                # than acnB, 1,644 TPM). Summing isozyme capacity would be more
+                # faithful, but it changes the baseline calibration and belongs
+                # with P0 item 4, after the proteome-allocation constraint.
                 if rxn_id in bounds:
                     existing = bounds[rxn_id]
                     bounds[rxn_id] = ReactionBound(
                         reaction_id=rxn_id,
-                        lower_bound=min(existing.lower_bound, -flux_max),
+                        # tightest reverse limit = the least negative one
+                        lower_bound=max(existing.lower_bound, -flux_max),
                         upper_bound=min(existing.upper_bound, flux_max),
                         source=source,
                     )
@@ -155,9 +194,21 @@ class BoundCompiler:
 
         Uses Gaussian-like decay from optimum. At optimum = 1.0,
         decreases with distance from optimum.
+
+        Note on pH: opt_ph is per-reaction (BRENDA). The growth-limiting
+        reaction under respiration, ACONTb, has opt_ph = 7.4, which is why
+        the effective whole-cell curve peaks near pH 7.4 rather than 7.0
+        and why pH 8.5 retains more activity than pH 5.5 (V6/D2).
         """
         # Temperature: sigma ~= 10°C (enzyme stability range)
         temp_factor = math.exp(-0.5 * ((actual_temp - opt_temp) / 10.0) ** 2)
+
+        # P0 item 3: thermal collapse. Enzyme activity is not symmetric
+        # about the optimum — above ~46 °C E. coli proteins denature and the
+        # cell stops growing, while the Gaussian alone still leaves ~43% at
+        # 50 °C. Apply an additional exponential decay above HEAT_COLLAPSE_C.
+        if actual_temp > HEAT_COLLAPSE_C:
+            temp_factor *= math.exp(-(actual_temp - HEAT_COLLAPSE_C) / HEAT_COLLAPSE_SCALE)
 
         # pH: sigma ~= 1.5 pH units
         ph_factor = math.exp(-0.5 * ((actual_ph - opt_ph) / 1.5) ** 2)

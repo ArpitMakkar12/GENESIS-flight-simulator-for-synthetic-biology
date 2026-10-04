@@ -68,6 +68,7 @@ const STATUS_STYLES: Record<string, string> = {
   optimal: "bg-[#3ef2ff]/10 text-[#7dffef] border-[#3ef2ff]/25",
   slowed: "bg-[#ffcf66]/10 text-[#ffcf66] border-[#ffcf66]/25",
   stressed: "bg-[#ff5a36]/10 text-[#ff8b6e] border-[#ff5a36]/25",
+  "not-viable": "bg-[#ff5a36]/20 text-[#ff5a36] border-[#ff5a36]/50",
   stalled: "bg-white/[0.05] text-[#5c8494] border-white/10",
   running: "bg-[#b98bff]/10 text-[#d4bcff] border-[#b98bff]/25",
 };

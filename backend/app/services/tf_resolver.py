@@ -29,7 +29,7 @@ ENVIRONMENT_RULES: dict[str, dict] = {
     # Carbon catabolite repression
     "CRP": {
         "rule": "active when glucose is absent",
-        "activation": lambda env: env["carbon_source"] != "glucose",
+        "activation": lambda env: env["carbon_source"] not in ("glucose", "fructose"),
     },
     "LacI": {
         "rule": "active (represses) when lactose is absent",
@@ -71,14 +71,14 @@ ENVIRONMENT_RULES: dict[str, dict] = {
         "activation": lambda env: env.get("stress") == "superoxide",
     },
     "RpoH": {
-        "rule": "active under heat shock (>42°C)",
-        "activation": lambda env: env["temperature"] > 42.0,
+        "rule": "active under heat shock (>=42°C)",
+        "activation": lambda env: env["temperature"] >= 42.0,
     },
     "RpoS": {
         "rule": "active in stationary phase or under general stress",
         "activation": lambda env: env.get("growth_phase") == "stationary"
                                   or env["temperature"] >= 42.0
-                                  or env["ph"] < 5.0 or env["ph"] > 9.0,
+                                  or env["ph"] < 5.0 or env["ph"] >= 8.5,
     },
     # Phosphate regulation
     "PhoB": {

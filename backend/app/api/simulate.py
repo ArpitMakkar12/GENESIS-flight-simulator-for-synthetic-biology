@@ -66,7 +66,14 @@ async def run_simulation(
             for p in result["expression_predictions"]
         ]
 
-    # Persist simulation result to database
+    # Persist simulation result to database.
+    # B1: the `status` column drives the UI badge, so it stores the
+    # biological growth_state; the raw solver outcome goes in fba_results.
+    # B6: created_at is stamped when the request arrived, not when the row
+    # is written, so it can never be later than completed_at.
+    model_versions = result.get("model_versions") or {
+        "predictor": result.get("model_version", "unknown")
+    }
     sim = Simulation(
         id=sim_id,
         construct_id=request.construct_id,
@@ -75,19 +82,28 @@ async def run_simulation(
         oxygen_level=request.oxygen_level,
         carbon_source=request.carbon_source,
         nitrogen_source=request.nitrogen_source,
-        status=result["status"],
+        status=result["growth_state"],
         expression_results=result.get("expression_predictions"),
         fba_results={
+            "solver_status": result.get("solver_status"),
+            "growth_state": result.get("growth_state"),
+            "infeasibility_reason": result.get("infeasibility_reason"),
             "active_pathways": result.get("active_pathways", []),
             "bottlenecks": result.get("bottlenecks", []),
             "flux_summary": result.get("flux_summary", {}),
+            "expression_summary": result.get("expression_summary", {}),
+            "active_tfs": result.get("active_tfs", []),
+            "regulator_state": result.get("regulator_state", {}),
+            "tf_state_changes": result.get("tf_state_changes", {}),
         },
-        model_versions={"predictor": result.get("model_version", "unknown")},
+        flux_distribution=result.get("flux_distribution"),
+        model_versions=model_versions,
         growth_rate=result.get("growth_rate"),
         doubling_time=result.get("doubling_time"),
         viability_score=result.get("viability_score"),
         started_at=started_at,
         completed_at=completed_at,
+        created_at=started_at,
         compute_time_ms=result.get("compute_time_ms"),
     )
     db.add(sim)
@@ -95,17 +111,23 @@ async def run_simulation(
 
     return SimulationResponse(
         task_id=sim_id,
-        status=result["status"],
+        solver_status=result.get("solver_status"),
+        growth_state=result.get("growth_state"),
+        status=result.get("solver_status"),
+        infeasibility_reason=result.get("infeasibility_reason"),
         growth_rate=result.get("growth_rate"),
         doubling_time=result.get("doubling_time"),
         viability_score=result.get("viability_score"),
         expression_predictions=expression_out,
         expression_summary=result.get("expression_summary"),
+        flux_distribution=result.get("flux_distribution"),
         flux_summary=result.get("flux_summary"),
         active_pathways=result.get("active_pathways"),
         active_tfs=result.get("active_tfs"),
+        regulator_state=result.get("regulator_state"),
+        tf_state_changes=result.get("tf_state_changes"),
         bottlenecks=result.get("bottlenecks"),
-        model_versions={"predictor": result.get("model_version", "unknown")},
+        model_versions=model_versions,
         conditions=result.get("conditions"),
         computed_at=completed_at,
         compute_time_ms=result.get("compute_time_ms"),

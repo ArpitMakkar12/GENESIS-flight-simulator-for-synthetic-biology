@@ -182,6 +182,31 @@ class SequenceMatcher:
         if not self._loaded:
             raise RuntimeError("SequenceMatcher.load() must be called first")
 
+        # B2 FIX: An empty or whitespace-only sequence means "I'm not
+        # supplying DNA, just look up the gene by ID". Without this,
+        # the empty string is split into an empty CDS that fails to
+        # match any stored sequence, so every known gene returns
+        # KNOWN_VARIANT (confidence 0.50) instead of KNOWN_WILDTYPE
+        # (confidence 0.85).
+        if not sequence or not sequence.strip():
+            record = self._lookup_id(gene_id)
+            if record:
+                return MatchResult(
+                    query_id=gene_id,
+                    match_type=MatchType.KNOWN_WILDTYPE,
+                    locus_tag=record.locus_tag,
+                    name=record.name,
+                    product=record.product,
+                    matched_by="gene_id",
+                    cds_identity=1.0,
+                    upstream_comparable=False,
+                )
+            return MatchResult(
+                query_id=gene_id,
+                match_type=MatchType.NOVEL,
+                notes=[f"gene_id {gene_id!r} not recognised, no sequence supplied"],
+            )
+
         notes: list[str] = []
         upstream, cds = split_sequence(sequence)
 

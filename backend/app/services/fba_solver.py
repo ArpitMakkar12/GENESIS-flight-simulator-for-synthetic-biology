@@ -137,7 +137,8 @@ class FBASolver:
 
         for rxn_id, flux in flux_dist.items():
             subsystem = rxn_to_subsystem.get(rxn_id, "")
-            if subsystem:
+            # F10: 'Unassigned' is a placeholder, not a pathway
+            if subsystem and subsystem.strip().lower() not in ("unassigned", "none"):
                 pathway_fluxes[subsystem] = pathway_fluxes.get(subsystem, 0) + abs(flux)
         active_pathways = sorted(pathway_fluxes, key=pathway_fluxes.get, reverse=True)[:15]
 
@@ -150,6 +151,16 @@ class FBASolver:
                 if abs(flux - bound.upper_bound) < 1e-6 or abs(flux - bound.lower_bound) < 1e-6:
                     bottlenecks.append(rxn.id)
 
+        # F9: an uptake limit (e.g. carbon or O2 exchange pinned at its lower
+        # bound) is a real growth limit and should not be hidden.
+        if exchange_constraints:
+            for rxn_id, (lb, _ub) in exchange_constraints.items():
+                if lb >= 0 or rxn_id not in model.reactions:
+                    continue
+                flux = solution.fluxes.get(rxn_id, 0)
+                if abs(flux - lb) < 1e-6:
+                    bottlenecks.insert(0, rxn_id)
+
         return FBAResult(
             growth_rate=solution.objective_value,
             flux_distribution=flux_dist,
@@ -158,3 +169,16 @@ class FBASolver:
             active_pathways=active_pathways,
             bottlenecks=bottlenecks[:10],
         )
+
+    def solver_name(self) -> str:
+        """Name of the LP solver COBRApy is using (F5)."""
+        if self.model is None:
+            self.load_model()
+        try:
+            return self.model.solver.interface.__name__.split(".")[-1].replace("_interface", "")
+        except Exception:
+            return "unknown"
+
+    @staticmethod
+    def cobra_version() -> str:
+        return getattr(cobra, "__version__", "unknown")

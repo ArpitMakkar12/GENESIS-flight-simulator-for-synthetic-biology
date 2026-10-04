@@ -17,6 +17,9 @@ const API = "http://localhost:8000/api/v1";
 interface SimulationResult {
   task_id: string;
   status: string;
+  solver_status?: string | null;
+  growth_state?: string | null;
+  infeasibility_reason?: string | null;
   growth_rate: number | null;
   doubling_time: number | null;
   viability_score: number | null;
@@ -154,8 +157,12 @@ function SimulateContent() {
     value: 6 - i,
   })) || [];
 
-  const statusLabel = result?.growth_rate != null && result.growth_rate > 0.7 ? "optimal"
-    : result?.growth_rate != null && result.growth_rate > 0.3 ? "slowed" : "stressed";
+  // B1: growth_state is computed server-side against the reference growth
+  // rate (0.2883 h⁻¹). The fallback mirrors the same thresholds.
+  const statusLabel = result?.growth_state
+    ?? (result == null || result.growth_rate == null || result.growth_rate < 0.01 ? "not-viable"
+      : result.growth_rate >= 0.2883 * 0.9 ? "optimal"
+      : result.growth_rate >= 0.2883 * 0.5 ? "slowed" : "stressed");
 
   return (
     <div className="max-w-6xl page-enter">
