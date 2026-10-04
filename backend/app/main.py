@@ -9,17 +9,33 @@ from app.api import simulate, constructs, parts, knowledge, results
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
-    # Startup: preload the AI predictor so the first simulation is fast
+    # Startup: warm the SAME runner the /simulate endpoint uses, so the first
+    # request doesn't pay for model loading (~4-5 s otherwise).
     print("BioSandbox API starting up...")
     try:
-        from app.services.simulation_runner import SimulationRunner
-        runner = SimulationRunner()
+        import time
+        t0 = time.perf_counter()
+        runner = simulate.get_runner()          # the shared singleton
+
+        # 1. AI predictor (gene table + regulator sets)
         predictor = runner._get_predictor()
         status = predictor.load_models(include_hyenadna=False)
-        print(f"  AI predictor loaded: {status.get('genes', 0)} genes, "
-              f"expression_model={status.get('expression', False)}")
+
+        # 2. iML1515 + gene rules for the bound compiler
+        runner.fba_solver.load_model()
+        runner.bound_compiler._load_data()      # kinetics + gene->reaction map
+        runner.bound_compiler.set_gpr_rules(
+            {r.id: r.gene_reaction_rule for r in runner.fba_solver.model.reactions}
+        )
+
+        # 3. One throwaway solve so the LP solver is initialised too
+        runner.fba_solver.solve(bounds=[], exchange_constraints={})
+
+        print(f"  Warm-up done in {time.perf_counter() - t0:.1f} s: "
+              f"{status.get('genes', 0)} genes, "
+              f"{len(runner.fba_solver.model.reactions)} reactions")
     except Exception as e:
-        print(f"  AI predictor preload failed (non-fatal): {e}")
+        print(f"  Warm-up failed (non-fatal, first request will be slow): {e}")
     yield
     # Shutdown: cleanup resources
     print("BioSandbox API shutting down...")

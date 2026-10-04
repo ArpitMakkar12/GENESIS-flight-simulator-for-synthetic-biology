@@ -20,7 +20,7 @@ from app.services.fba_solver import FBASolver
 
 # Growth rate under the reference condition (37 C, pH 7, aerobic, glucose,
 # ammonium). growth_state is reported relative to this.
-REFERENCE_GROWTH_RATE = 0.2883
+REFERENCE_GROWTH_RATE = 0.802
 
 
 class SimulationRunner:
@@ -113,6 +113,14 @@ class SimulationRunner:
         prediction_output: PredictionOutput = predictor.predict(prediction_input)
 
         # ── Step 4: Compile bounds ──
+        # Gene rules (AND -> min, OR -> sum) so isozymes add up instead of the
+        # weakest gene capping the reaction. Loaded once, then cached.
+        if self.bound_compiler._gpr_trees is None:
+            self.fba_solver.load_model()
+            self.bound_compiler.set_gpr_rules(
+                {r.id: r.gene_reaction_rule for r in self.fba_solver.model.reactions}
+            )
+
         bounds = self.bound_compiler.compile(
             expression_results=prediction_output.results,
             temperature=temperature,
@@ -120,7 +128,16 @@ class SimulationRunner:
         )
 
         # ── Step 5: Set exchange constraints based on carbon source ──
-        exchange_constraints = self._get_exchange_constraints(carbon_source, oxygen_level)
+        # Kept unscaled for the V7 diagnosis (37 °C, pH 7 uptake capacity).
+        base_exchange_constraints = self._get_exchange_constraints(carbon_source, oxygen_level)
+
+        # Uptake is enzyme-mediated (PTS, transporters), so it slows with T and pH
+        # like the rest of metabolism. Factor = 1.0 at 37 °C, pH 7.
+        uptake_activity = BoundCompiler.get_activity_factor(37.0, 7.0, temperature, ph)
+        exchange_constraints = {
+            rxn: (lb * uptake_activity if lb < 0 else lb, ub)
+            for rxn, (lb, ub) in base_exchange_constraints.items()
+        }
 
         # ── Step 6: Solve FBA ──
         fba_result = self.fba_solver.solve(
@@ -178,27 +195,37 @@ class SimulationRunner:
         # against the reference growth rate so the UI can show it directly.
         growth_state = self._growth_state(fba_result.status, fba_result.growth_rate)
 
-        # V7: on an infeasible result, re-solve once without the GENESIS
-        # expression/kinetic bounds. Still infeasible -> the medium itself
-        # cannot support growth (biological). Feasible -> our constraints
-        # caused it. Only runs on failures, so it costs nothing normally.
+        # V7: on an infeasible result, find out why. Only runs on failures.
+        #   1) Medium alone at normal uptake, no GENESIS bounds -> fails: biological
+        #   2) Medium with this T/pH applied to uptake         -> fails: environmental
+        #   3) Otherwise the expression/kinetic bounds caused it -> constraint
         infeasibility_reason = None
         if fba_result.status != "optimal" or fba_result.growth_rate < 0.01:
-            unconstrained = self.fba_solver.solve(
-                bounds=[], exchange_constraints=exchange_constraints,
+            baseline = self.fba_solver.solve(
+                bounds=[], exchange_constraints=base_exchange_constraints,
             )
-            if unconstrained.status != "optimal" or unconstrained.growth_rate < 0.01:
+            if baseline.status != "optimal" or baseline.growth_rate < 0.01:
                 infeasibility_reason = (
                     "biological: the medium cannot support growth even without "
                     "expression or kinetic constraints (e.g. no usable electron "
                     "acceptor for this carbon source)"
                 )
             else:
-                infeasibility_reason = (
-                    "constraint: growth is possible on this medium "
-                    f"({unconstrained.growth_rate:.4f} hr-1 unconstrained), so the "
-                    "expression/kinetic bounds applied by GENESIS caused the failure"
+                env_only = self.fba_solver.solve(
+                    bounds=[], exchange_constraints=exchange_constraints,
                 )
+                if env_only.status != "optimal" or env_only.growth_rate < 0.01:
+                    infeasibility_reason = (
+                        f"environmental: at {temperature:g} °C, pH {ph:g}, enzyme and "
+                        f"uptake activity ({uptake_activity:.0%} of optimum) fall below "
+                        "the cell's maintenance-energy requirement"
+                    )
+                else:
+                    infeasibility_reason = (
+                        "constraint: growth is possible on this medium "
+                        f"({env_only.growth_rate:.4f} hr-1 without GENESIS bounds), so the "
+                        "expression/kinetic bounds applied by GENESIS caused the failure"
+                    )
 
         # B4: report the master regulators explicitly (the full active list
         # is dominated by ~350 default-active TFs and truncating it hid CRP).
@@ -231,14 +258,15 @@ class SimulationRunner:
                 "genes_by_source": meta.get("genes_by_source"),
             },
             # B3: flux values from the COBRApy solution (already filtered to
-            # |flux| > 1e-6 by the solver); top 150 by magnitude
+            # |flux| > 1e-6 by the solver); all non-zero fluxes (~450) so small
+            # but important ones (e.g. ICL/MALS on acetate) are not dropped
             "flux_distribution": {
                 rxn_id: round(flux, 6)
                 for rxn_id, flux in sorted(
                     fba_result.flux_distribution.items(),
                     key=lambda x: abs(x[1]),
                     reverse=True,
-                )[:150]
+                )
             },
             "flux_summary": {
                 "total_reactions_with_flux": len(fba_result.flux_distribution),
@@ -315,12 +343,23 @@ class SimulationRunner:
             "arabinose": "EX_arab__L_e",
         }
 
+        # Every carbon source gets the same carbon supply: 60 C-mmol/gDW/h,
+        # i.e. the standard 10 mmol/gDW/h of glucose. Without this, a 12-carbon
+        # sugar (lactose) delivers twice the carbon of glucose and out-grows it.
+        CARBON_ATOMS = {
+            "glucose": 6, "fructose": 6, "galactose": 6, "lactose": 12,
+            "glycerol": 3, "acetate": 2, "succinate": 4,
+            "xylose": 5, "arabinose": 5,
+        }
+        CARBON_UPTAKE_CMMOL = 60.0
+
         # Turn off all carbon sources first, then enable the selected one
         for source, rxn_id in carbon_exchanges.items():
             if source == carbon_source:
-                constraints[rxn_id] = (-10.0, 1000.0)  # uptake allowed
+                uptake = CARBON_UPTAKE_CMMOL / CARBON_ATOMS[source]
+                constraints[rxn_id] = (-uptake, 1000.0)  # uptake allowed
             else:
-                constraints[rxn_id] = (0.0, 1000.0)    # no uptake
+                constraints[rxn_id] = (0.0, 1000.0)      # no uptake
 
         # Oxygen
         if oxygen_level == "aerobic":

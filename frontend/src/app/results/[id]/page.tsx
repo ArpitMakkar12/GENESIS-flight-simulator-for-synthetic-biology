@@ -12,24 +12,45 @@ interface ExpressionResult {
   gene_id: string;
   relative_expression: number;
   confidence: number;
-  source?: string;
+  prediction_source?: string; // what the API actually sends ("lookup" | "model" | "fallback")
+  source?: string;            // legacy field name, kept for older stored results
+  reference_tpm?: number | null;
+  rbs_score?: number | null;
+}
+
+interface ExpressionSummary {
+  genes_up: number;
+  genes_down: number;
+  total_genes_evaluated: number;
+  genes_with_changed_expression: number;
+  genes_by_source?: Record<string, number>;
 }
 
 interface FbaResults {
   active_pathways: string[];
   bottlenecks: string[];
+  active_tfs?: string[];
+  growth_state?: string;
+  solver_status?: string;
+  infeasibility_reason?: string | null;
+  regulator_state?: Record<string, boolean>;
+  tf_state_changes?: Record<string, unknown>;
+  expression_summary?: ExpressionSummary;
 }
 
 interface SimulationDetail {
   id: string;
   status: string;
+  growth_state?: string;
+  solver_status?: string;
+  infeasibility_reason?: string | null;
   temperature: number;
   ph: number;
   oxygen_level: string;
   carbon_source: string;
   nitrogen_source: string;
   growth_rate: number;
-  doubling_time: number;
+  doubling_time: number | null;
   viability_score: number;
   expression_results: ExpressionResult[] | null;
   fba_results: FbaResults | null;
@@ -38,6 +59,12 @@ interface SimulationDetail {
   compute_time_ms: number;
   created_at: string;
   completed_at: string;
+}
+
+/** Fold change as "2.00×" / "0.375×" — clearer than a percentage for regulation. */
+function formatFold(value: number): string {
+  if (value >= 1) return `${value.toFixed(2)}×`;
+  return `${value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}×`;
 }
 
 export default function SimulationDetailPage() {
@@ -109,12 +136,18 @@ export default function SimulationDetailPage() {
 
   const conditionSummary = `${sim.temperature}°C · pH ${sim.ph} · ${sim.oxygen_level} · ${sim.carbon_source}`;
 
+  // B1: show the biological growth state, not the LP solver status.
+  const growthState = sim.growth_state ?? sim.fba_results?.growth_state ?? sim.status;
+  const infeasibilityReason = sim.infeasibility_reason ?? sim.fba_results?.infeasibility_reason ?? null;
+  const summary = sim.fba_results?.expression_summary;
+  const expressionResults = sim.expression_results ?? [];
+
   return (
     <div className="page-enter space-y-6 pb-20">
       {/* Header Breadcrumb Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/[0.07] pb-4">
         <div>
-          <button 
+          <button
             onClick={() => router.push("/results")}
             className="text-muted hover:text-white transition-colors mb-2 text-sm"
           >
@@ -126,15 +159,15 @@ export default function SimulationDetailPage() {
           </div>
           <p className="text-sm text-[#8cc3d4] mt-1">{conditionSummary}</p>
         </div>
-        
+
         <div className="flex gap-3">
-          <button 
+          <button
             onClick={() => exportSimulationMarkdown(sim)}
             className="px-4 py-2 text-sm rounded bg-white/[0.04] border border-white/[0.07] text-[#eaffff] hover:bg-white/[0.08] transition-colors"
           >
             Export .md
           </button>
-          <button 
+          <button
             onClick={handleDelete}
             disabled={deleting}
             className="px-4 py-2 text-sm rounded bg-red-900/30 border border-red-500/30 text-red-400 hover:bg-red-900/50 transition-colors disabled:opacity-50"
@@ -151,7 +184,9 @@ export default function SimulationDetailPage() {
           <div className="text-xs text-[#5c8494] mt-1 uppercase tracking-wider">Growth Rate</div>
         </div>
         <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl backdrop-blur-md p-4 flex flex-col items-center justify-center">
-          <div className="text-2xl font-mono-readout text-[#3ef2ff] glow-text">{sim.doubling_time?.toFixed(2) || "∞"} hr</div>
+          <div className="text-2xl font-mono-readout text-[#3ef2ff] glow-text">
+            {sim.doubling_time != null ? `${sim.doubling_time.toFixed(2)} hr` : "∞"}
+          </div>
           <div className="text-xs text-[#5c8494] mt-1 uppercase tracking-wider">Doubling Time</div>
         </div>
         <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl backdrop-blur-md p-4 flex flex-col items-center justify-center">
@@ -161,10 +196,18 @@ export default function SimulationDetailPage() {
           <div className="text-xs text-[#5c8494] mt-1 uppercase tracking-wider">Viability</div>
         </div>
         <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl backdrop-blur-md p-4 flex flex-col items-center justify-center">
-          <StatusBadge status={sim.status} />
-          <div className="text-xs text-[#5c8494] mt-2 uppercase tracking-wider">Status</div>
+          <StatusBadge status={growthState} />
+          <div className="text-xs text-[#5c8494] mt-2 uppercase tracking-wider">Growth State</div>
         </div>
       </div>
+
+      {/* V7: why no growth */}
+      {infeasibilityReason && (
+        <Card className="border-red-500/20 bg-red-500/5 p-5">
+          <h3 className="text-sm font-semibold text-red-300 mb-1">No feasible growth</h3>
+          <p className="text-sm text-[#8cc3d4]">{infeasibilityReason}</p>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Environment Section */}
@@ -192,7 +235,7 @@ export default function SimulationDetailPage() {
             status={sim.status}
             growthRate={sim.growth_rate}
             activePathwayCount={sim.fba_results?.active_pathways?.length || 0}
-            expressionCount={sim.expression_results?.length || 0}
+            expressionCount={summary?.total_genes_evaluated ?? expressionResults.length}
           />
         </div>
       </div>
@@ -200,7 +243,7 @@ export default function SimulationDetailPage() {
       {/* Flux Map */}
       <div className="mt-8">
         <h2 className="text-lg font-medium text-[#eaffff] mb-4">Metabolic Flux</h2>
-        <FluxMap 
+        <FluxMap
           oxygenLevel={sim.oxygen_level as "aerobic" | "anaerobic" | "microaerobic"}
           growthRate={sim.growth_rate}
           conditionLabel={conditionSummary}
@@ -225,39 +268,69 @@ export default function SimulationDetailPage() {
 
       {/* Expression Predictions */}
       <Card className="p-5">
-        <h3 className="text-sm font-semibold text-[#d9f7ff] mb-3">Expression Predictions</h3>
-        {(!sim.expression_results || sim.expression_results.length === 0) ? (
-          <p className="text-[#5c8494] text-sm italic">No expression predictions available for this simulation.</p>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+          <h3 className="text-sm font-semibold text-[#d9f7ff]">Expression Predictions</h3>
+          {summary && (
+            <span className="text-xs text-[#5c8494] font-mono-readout">
+              {summary.genes_up.toLocaleString()} up · {summary.genes_down.toLocaleString()} down ·{" "}
+              {summary.total_genes_evaluated.toLocaleString()} evaluated
+              {expressionResults.length > 0 && expressionResults.length < summary.genes_with_changed_expression
+                ? ` · showing top ${expressionResults.length}`
+                : ""}
+            </span>
+          )}
+        </div>
+
+        {expressionResults.length === 0 ? (
+          <p className="text-[#5c8494] text-sm italic">
+            {summary?.total_genes_evaluated
+              ? `No genes changed vs reference — all ${summary.total_genes_evaluated.toLocaleString()} evaluated genes are at 1.0×.`
+              : "No expression predictions available for this simulation."}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/[0.07] text-[#5c8494] text-xs uppercase tracking-wider">
                   <th className="pb-2 font-medium">Gene</th>
-                  <th className="pb-2 font-medium">Relative Expression</th>
+                  <th className="pb-2 font-medium">Fold vs Reference</th>
+                  <th className="pb-2 font-medium">Reference TPM</th>
                   <th className="pb-2 font-medium">Confidence</th>
                   <th className="pb-2 font-medium">Source</th>
                 </tr>
               </thead>
               <tbody className="text-sm">
-                {sim.expression_results.map((expr, idx) => (
-                  <tr key={idx} className="border-b border-white/[0.02] last:border-0 hover:bg-white/[0.02]">
-                    <td className="py-3 font-mono-readout text-[#8cc3d4]">{expr.gene_id}</td>
-                    <td className="py-3">
-                      {(expr.confidence === 0 && expr.source === "stub") ? (
-                        <span className="text-[#5c8494] italic text-xs">model not yet trained</span>
-                      ) : (
-                        <span className="text-[#3ef2ff] font-mono-readout">{(expr.relative_expression * 100).toFixed(1)}%</span>
-                      )}
-                    </td>
-                    <td className="py-3">
-                      {(expr.confidence === 0 && expr.source === "stub") ? "-" : (
-                        <span className="text-[#7dffef] font-mono-readout">{(expr.confidence * 100).toFixed(1)}%</span>
-                      )}
-                    </td>
-                    <td className="py-3 text-[#5c8494]">{expr.source || "prediction"}</td>
-                  </tr>
-                ))}
+                {expressionResults.map((expr, idx) => {
+                  const source = expr.prediction_source ?? expr.source ?? "prediction";
+                  const isStub = expr.confidence === 0 && source === "stub";
+                  const fold = expr.relative_expression;
+                  const foldColor =
+                    fold > 1 ? "text-[#3ef2ff]" : fold < 1 ? "text-amber-300" : "text-[#8cc3d4]";
+                  return (
+                    <tr key={`${expr.gene_id}-${idx}`} className="border-b border-white/[0.02] last:border-0 hover:bg-white/[0.02]">
+                      <td className="py-3 font-mono-readout text-[#8cc3d4]">{expr.gene_id}</td>
+                      <td className="py-3">
+                        {isStub ? (
+                          <span className="text-[#5c8494] italic text-xs">model not yet trained</span>
+                        ) : (
+                          <span className={`${foldColor} font-mono-readout`}>
+                            {fold > 1 ? "▲ " : fold < 1 ? "▼ " : ""}
+                            {formatFold(fold)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 font-mono-readout text-[#5c8494]">
+                        {expr.reference_tpm != null ? expr.reference_tpm.toLocaleString() : "-"}
+                      </td>
+                      <td className="py-3">
+                        {isStub ? "-" : (
+                          <span className="text-[#7dffef] font-mono-readout">{(expr.confidence * 100).toFixed(0)}%</span>
+                        )}
+                      </td>
+                      <td className="py-3 text-[#5c8494]">{source}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -266,16 +339,16 @@ export default function SimulationDetailPage() {
 
       {/* Raw Output Toggle */}
       <Card className="!p-0 overflow-hidden mt-6">
-        <button 
+        <button
           onClick={() => setRawExpanded(!rawExpanded)}
           className="w-full p-4 flex justify-between items-center text-left hover:bg-white/[0.02] transition-colors"
         >
           <span className="font-medium text-[#8cc3d4]">View Raw JSON {rawExpanded ? "▴" : "▾"}</span>
         </button>
-        
+
         {rawExpanded && (
           <div className="p-4 border-t border-white/[0.07] relative">
-            <button 
+            <button
               onClick={handleCopyRaw}
               className="absolute top-4 right-4 px-3 py-1 bg-white/[0.1] text-xs rounded hover:bg-white/[0.2] transition-colors text-[#eaffff]"
             >

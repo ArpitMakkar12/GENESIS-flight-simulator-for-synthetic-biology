@@ -78,7 +78,7 @@ ENVIRONMENT_RULES: dict[str, dict] = {
         "rule": "active in stationary phase or under general stress",
         "activation": lambda env: env.get("growth_phase") == "stationary"
                                   or env["temperature"] >= 42.0
-                                  or env["ph"] < 5.0 or env["ph"] >= 8.5,
+                                  or env["ph"] < 5.0 or env["ph"] > 9.0,
     },
     # Phosphate regulation
     "PhoB": {

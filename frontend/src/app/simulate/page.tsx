@@ -158,11 +158,13 @@ function SimulateContent() {
   })) || [];
 
   // B1: growth_state is computed server-side against the reference growth
-  // rate (0.2883 h⁻¹). The fallback mirrors the same thresholds.
+  // rate. This fallback mirrors the same thresholds. Keep REFERENCE_GROWTH_RATE
+  // in sync with backend/app/services/simulation_runner.py.
+  const REFERENCE_GROWTH_RATE = 0.802;
   const statusLabel = result?.growth_state
     ?? (result == null || result.growth_rate == null || result.growth_rate < 0.01 ? "not-viable"
-      : result.growth_rate >= 0.2883 * 0.9 ? "optimal"
-      : result.growth_rate >= 0.2883 * 0.5 ? "slowed" : "stressed");
+      : result.growth_rate >= REFERENCE_GROWTH_RATE * 0.9 ? "optimal"
+      : result.growth_rate >= REFERENCE_GROWTH_RATE * 0.5 ? "slowed" : "stressed");
 
   return (
     <div className="max-w-6xl page-enter">
