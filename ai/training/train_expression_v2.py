@@ -245,20 +245,36 @@ def main() -> None:
         print("    Predictions have a realistic spread.")
 
     # ------------------------------------------------------------------
-    print("\n[8] Saving")
+        print("\n[8] Saving")
     import joblib
+
+    # Ensemble predictions on the TRAIN split too, so the saved overfit gap
+    # describes the model actually shipped rather than boosting alone.
+    pred_ens_train = best_w * ridge.predict(X_tr) + (1 - best_w) * gb.predict(X_tr)
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({
+        "format": "expression_fusion_v1",
         "scaler": scaler,
         "pca": pca,
         "ridge": ridge,
         "gb": gb,
         "ensemble_weight": best_w,
+        "use_hand_features": True,
         "n_components": N_COMPONENTS,
-        "test_r": r_ens,
         "target": "log2_tpm",
         "seed": SEED,
+        # Kept so an older loader still finds the headline score.
+        "test_r": r_ens,
+        "metrics": {
+            "test_r": r_ens,
+            "test_r2": r2_score(y_te, pred_ens),
+            "test_mae": mean_absolute_error(y_te, pred_ens),
+            "train_r": pearson(y_tr, pred_ens_train),
+            "n_train": int(len(tr)),
+            "n_test": int(len(te)),
+            "trained_on": f"{ENCODED.name} ({len(tr) + len(te):,} genes)",
+        },
     }, MODEL_PATH)
     print(f"    {MODEL_PATH}")
 

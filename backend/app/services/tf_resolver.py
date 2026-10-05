@@ -43,6 +43,14 @@ ENVIRONMENT_RULES: dict[str, dict] = {
         "rule": "activator mode when arabinose present",
         "activation": lambda env: env["carbon_source"] == "arabinose",
     },
+    "IclR": {
+        "rule": "active (represses glyoxylate shunt) unless acetate is the carbon source",
+        "activation": lambda env: env["carbon_source"] != "acetate",
+    },
+    "Cra": {
+        "rule": "active on gluconeogenic substrates (low fructose-1,6-bisphosphate)",
+        "activation": lambda env: env["carbon_source"] in ("acetate", "succinate"),
+    },
     # Oxygen response
     "FNR": {
         "rule": "active under anaerobic conditions",

@@ -210,6 +210,10 @@ def seed_trn(session: Session) -> None:
     total_regs = session.execute(text("SELECT COUNT(*) FROM gene_regulations")).scalar()
     print(f"\n  Final: {total_tfs} TFs, {total_regs} regulatory interactions")
 
+    from app.data.apply_curated_regulations import apply_curated
+    s = apply_curated(session)
+    print(f"  Curated overrides: {s['upgraded']} upgraded, {s['inserted']} added")
+
 
 def main():
     print("=" * 60)

@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
 
         # 1. AI predictor (gene table + regulator sets)
         predictor = runner._get_predictor()
-        status = predictor.load_models(include_hyenadna=False)
+        status = predictor.load_models(include_hyenadna=True)
 
         # 2. iML1515 + gene rules for the bound compiler
         runner.fba_solver.load_model()
@@ -32,8 +32,10 @@ async def lifespan(app: FastAPI):
         runner.fba_solver.solve(bounds=[], exchange_constraints={})
 
         print(f"  Warm-up done in {time.perf_counter() - t0:.1f} s: "
-              f"{status.get('genes', 0)} genes, "
-              f"{len(runner.fba_solver.model.reactions)} reactions")
+            f"{status.get('genes', 0)} genes, "
+            f"{len(runner.fba_solver.model.reactions)} reactions, "
+            f"expression model {'loaded' if status.get('expression') else 'MISSING'}, "
+            f"HyenaDNA {'loaded' if status.get('hyenadna') else 'MISSING'}")
     except Exception as e:
         print(f"  Warm-up failed (non-fatal, first request will be slow): {e}")
     yield

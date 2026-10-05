@@ -48,6 +48,10 @@ REF_NITROGEN = "ammonium"
 REFERENCE_TF_STATE: dict[str, bool] = {
     "CRP":   False,   # glucose present -> cAMP low -> CRP inactive
     "LacI":  True,    # no lactose -> repressor bound, lac operon off
+    "AraC":  False,   # no arabinose -> araBAD not activated
+    "GalR":  True,    # no galactose -> gal genes repressed
+    "IclR":  True,    # no acetate -> glyoxylate shunt repressed
+    "Cra":   False,   # glucose -> FBP high -> Cra inactive
     "FNR":   False,   # aerobic -> oxygen-sensing regulator inactive
     "ArcA":  False,   # aerobic
     "OxyR":  False,   # no oxidative stress

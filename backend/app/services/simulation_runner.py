@@ -97,6 +97,16 @@ class SimulationRunner:
                 gene_ids = ["b0002", "b0344", "b3702"]
                 gene_sequences = [""] * len(gene_ids)
 
+        # Custom DNA from the Simulate page. Predicted alongside the genome so
+        # the sequence model (Track B) actually reads it. It is not linked to
+        # any reaction, so it cannot change growth.
+        custom_part_id = None
+        if raw_sequence and raw_sequence.strip():
+            custom_part_id = "custom_part_1"
+            custom_seq = "".join(raw_sequence.split()).upper()  # drop pasted line breaks
+            gene_ids = list(gene_ids) + [custom_part_id]
+            gene_sequences = list(gene_sequences) + [custom_seq]
+
         prediction_input = PredictionInput(
             gene_ids=gene_ids,
             gene_sequences=gene_sequences,
@@ -190,6 +200,17 @@ class SimulationRunner:
         )[:n_down]
         top_predictions = upregulated + downregulated
 
+        
+        # The custom part is the whole point of a run that supplied DNA, so it
+        # is always returned — its fold change is 1.0 (no TF targets it), which
+        # the up/down filters above would otherwise drop.
+        if custom_part_id is not None and not any(
+            p["gene_id"] == custom_part_id for p in top_predictions
+        ):
+            top_predictions = [
+                p for p in all_predictions if p["gene_id"] == custom_part_id
+            ] + top_predictions
+
         # B1: the solver status says whether FBA found a solution; it says
         # nothing about how the cell is doing. growth_state is computed
         # against the reference growth rate so the UI can show it directly.
@@ -256,6 +277,9 @@ class SimulationRunner:
                 "genes_up": len(up_all),
                 "genes_down": len(down_all),
                 "genes_by_source": meta.get("genes_by_source"),
+                "model_error": meta.get("model_error"),
+                "validation_warnings": meta.get("validation_warnings"),
+                "custom_sequence_bp": len(gene_sequences[-1]) if custom_part_id else None,
             },
             # B3: flux values from the COBRApy solution (already filtered to
             # |flux| > 1e-6 by the solver); all non-zero fluxes (~450) so small

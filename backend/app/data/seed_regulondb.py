@@ -149,7 +149,7 @@ def generate_core_regulondb_data() -> tuple[dict, list[dict]]:
         {"tf_name": "CRP", "gene_name": "malE", "regulation_type": "activator", "confidence_score": 0.9, "evidence_level": "strong"},
         {"tf_name": "CRP", "gene_name": "araB", "regulation_type": "activator", "confidence_score": 0.9, "evidence_level": "strong"},
         {"tf_name": "CRP", "gene_name": "glpF", "regulation_type": "activator", "confidence_score": 0.85, "evidence_level": "strong"},
-        {"tf_name": "CRP", "gene_name": "aceB", "regulation_type": "activator", "confidence_score": 0.85, "evidence_level": "strong"},
+        {"tf_name": "CRP", "gene_name": "aceB", "regulation_type": "repressor", "confidence_score": 0.85, "evidence_level": "strong"},
         # LacI represses lac operon
         {"tf_name": "LacI", "gene_name": "lacZ", "regulation_type": "repressor", "confidence_score": 0.99, "evidence_level": "strong"},
         {"tf_name": "LacI", "gene_name": "lacY", "regulation_type": "repressor", "confidence_score": 0.99, "evidence_level": "strong"},
