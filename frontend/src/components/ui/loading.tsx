@@ -57,7 +57,8 @@ export function LaunchSequence({
     <div className="rounded-xl bg-[#01070c]/80 border border-white/[0.08] p-5 font-mono-readout text-sm leading-[1.75] text-[#8cc3d4]">
       {LAUNCH_STEPS.slice(0, visibleLines).map((line, i) => (
         <div key={i} className="launch-line" style={{ animationDelay: `${i * 0.05}s` }}>
-          <Check className="inline h-3.5 w-3.5 text-[#3ef2ff] align-[-2px]" strokeWidth={2.5} aria-hidden="true" />
+          <Check className="inline h-3.5 w-3.5 text-[#3ef2ff] align-[-2px]" strokeWidth={2.5} aria-hidden="true" />{" "}
+          {formatLine(line)}
         </div>
       ))}
       {visibleLines < LAUNCH_STEPS.length && (
