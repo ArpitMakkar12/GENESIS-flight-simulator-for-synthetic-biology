@@ -9,6 +9,7 @@ import {
 import { Card, MetricCard } from "@/components/ui/card";
 import { LaunchSequence, ErrorBanner } from "@/components/ui/loading";
 import { EnvParams, PRESETS, DEFAULT_PARAMS, shallowEqual } from "@/lib/presets";
+import { Timer, HeartPulse, Zap, FlaskConical, LoaderCircle, Play } from "lucide-react";
 
 const API = "http://localhost:8000/api/v1";
 
@@ -259,19 +260,19 @@ function SimulateContent() {
                   label="Doubling Time"
                   value={result.doubling_time != null ? `${result.doubling_time} hr` : "N/A"}
                   color="blue"
-                  icon="⏱️"
+                  icon={Timer}
                 />
                 <MetricCard
                   label="Viability"
                   value={result.viability_score != null ? `${(result.viability_score * 100).toFixed(0)}%` : "N/A"}
                   color={result.viability_score != null && result.viability_score > 0.5 ? "green" : "red"}
-                  icon="💚"
+                  icon={HeartPulse}
                 />
                 <MetricCard
                   label="Compute Time"
                   value={result.compute_time_ms != null ? `${result.compute_time_ms} ms` : "N/A"}
                   color="gray"
-                  icon="⚡"
+                  icon={Zap}
                 />
               </div>
 
@@ -340,7 +341,9 @@ function SimulateContent() {
           {/* Empty state */}
           {!result && !loading && !error && (
             <Card className="p-8 text-center">
-              <div className="text-4xl mb-3 opacity-70 drop-shadow-[0_0_14px_rgba(62,242,255,0.35)]">🧪</div>
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#3ef2ff]/10 ring-1 ring-[#3ef2ff]/25 shadow-[0_0_24px_-4px_rgba(62,242,255,0.35)]">
+                <FlaskConical className="h-8 w-8 text-[#7dffef]" strokeWidth={1.5} aria-hidden="true" />
+              </div>
               <p className="text-[#8cc3d4] text-sm max-w-md mx-auto leading-relaxed">
                 Configure environmental conditions and click <strong className="text-[#7dffef] font-medium">Run Simulation</strong> to
                 predict gene expression and metabolic flux.
@@ -408,7 +411,17 @@ function SimulateContent() {
               onClick={runSimulation}
               disabled={loading || !!seqError}
             >
-              {loading ? "⏳ Running..." : "▶ Run Simulation"}
+              {loading ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Running…
+                </span>
+              ) : (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Play className="h-4 w-4 fill-current" aria-hidden="true" />
+                  Run Simulation
+                </span>
+              )}
             </button>
 
             <button

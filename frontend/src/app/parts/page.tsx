@@ -9,6 +9,8 @@ import {
 } from '@/components/reference/detail-panel';
 import { getPartFields } from '@/components/reference/field-config';
 
+import { Blocks, LayoutGrid, CornerUpRight, CircleDot, ArrowBigRight, ArrowRightToLine, PackageOpen } from "lucide-react";
+
 const API_BASE = 'http://localhost:8000/api/v1';
 
 interface Part {
@@ -27,11 +29,11 @@ interface PartDetail extends Part {
 }
 
 const PART_TYPES = [
-  { key: null, label: 'All', icon: '📦' },
-  { key: 'promoter', label: 'Promoters', icon: '▶️' },
-  { key: 'rbs', label: 'RBS', icon: '🟢' },
-  { key: 'cds', label: 'CDS', icon: '🧬' },
-  { key: 'terminator', label: 'Terminators', icon: '⏹️' },
+  { key: null,         label: 'All',         icon: LayoutGrid },
+  { key: 'promoter',   label: 'Promoters',   icon: CornerUpRight },
+  { key: 'rbs',        label: 'RBS',         icon: CircleDot },
+  { key: 'cds',        label: 'CDS',         icon: ArrowBigRight },
+  { key: 'terminator', label: 'Terminators', icon: ArrowRightToLine },
 ];
 
 /** Treat "N/A" as missing for display purposes */
@@ -86,13 +88,14 @@ export default function PartsPage() {
           <button
             key={t.label}
             onClick={() => setTypeFilter(t.key)}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all border ${
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all border ${
               typeFilter === t.key
                 ? 'bg-[#3ef2ff]/15 text-[#7dffef] border-[#3ef2ff]/40'
                 : 'bg-white/[0.04] text-[#8cc3d4] border-white/10 hover:bg-white/[0.07] hover:text-[#d9f7ff]'
             }`}
           >
-            {t.icon} {t.label}
+            <t.icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+            {t.label}
           </button>
         ))}
       </div>
@@ -120,7 +123,7 @@ export default function PartsPage() {
             {loading ? (
               <div className="py-8"><Spinner /></div>
             ) : filtered.length === 0 ? (
-              <EmptyState icon="📦" title="No parts found" description="Try a different search or filter." />
+              <EmptyState icon={PackageOpen} title="No parts found" description="Try a different search or filter." />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -203,7 +206,7 @@ export default function PartsPage() {
               )}
             </ReferenceDetailPanel>
           ) : (
-            <DetailEmptyState icon="🧬" text="Click a part to view details" />
+            <DetailEmptyState icon={Blocks} text="Click a part to view details" />
           )}
         </div>
       </div>

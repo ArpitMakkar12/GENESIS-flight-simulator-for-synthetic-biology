@@ -12,6 +12,13 @@ import {
   getTFFields,
   getPathwayFields,
 } from '@/components/reference/field-config';
+import { Dna, Network, Workflow, SearchX, type LucideIcon } from "lucide-react";
+
+const TAB_META: Record<'genes' | 'tfs' | 'pathways', { label: string; Icon: LucideIcon }> = {
+  genes:    { label: 'Genes',                 Icon: Dna },
+  tfs:      { label: 'Transcription Factors', Icon: Network },
+  pathways: { label: 'Pathways',              Icon: Workflow },
+};
 
 const API_BASE = 'http://localhost:8000/api/v1';
 
@@ -210,19 +217,23 @@ export default function KnowledgePage() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-6">
-        {(['genes', 'tfs', 'pathways'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all border ${
-              activeTab === tab
-                ? 'bg-[#3ef2ff]/15 text-[#7dffef] border-[#3ef2ff]/40'
-                : 'bg-white/[0.04] text-[#8cc3d4] border-white/10 hover:bg-white/[0.07] hover:text-[#d9f7ff]'
-            }`}
-          >
-            {tab === 'genes' ? '🧬 Genes' : tab === 'tfs' ? '🎛️ Transcription Factors' : '🔄 Pathways'}
-          </button>
-        ))}
+        {(['genes', 'tfs', 'pathways'] as const).map((tab) => {
+          const { label, Icon } = TAB_META[tab];
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all border ${
+                activeTab === tab
+                  ? 'bg-[#3ef2ff]/15 text-[#7dffef] border-[#3ef2ff]/40'
+                  : 'bg-white/[0.04] text-[#8cc3d4] border-white/10 hover:bg-white/[0.07] hover:text-[#d9f7ff]'
+              }`}
+            >
+              <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {/* ═══════════════════════════════════════════════════ */}
@@ -253,7 +264,9 @@ export default function KnowledgePage() {
           {!geneSearched ? (
             /* Initial prompt state */
             <Card className="p-8 text-center border-dashed">
-              <div className="text-4xl mb-3 opacity-30">🧬</div>
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#3ef2ff]/10 ring-1 ring-[#3ef2ff]/25">
+                <Dna className="h-7 w-7 text-[#7dffef]" strokeWidth={1.5} aria-hidden="true" />
+              </div>
               <p className="text-[#8cc3d4] mb-3">Search 4,651 genes by name, locus tag, or product</p>
               <div className="flex gap-2 justify-center flex-wrap">
                 {['lacZ', 'b0344', 'polymerase'].map((q) => (
@@ -272,7 +285,9 @@ export default function KnowledgePage() {
           ) : genes.length === 0 ? (
             /* Zero results — distinct from prompt state */
             <Card className="p-8 text-center">
-              <div className="text-4xl mb-3 opacity-30">🔍</div>
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.04] ring-1 ring-white/10">
+                <SearchX className="h-7 w-7 text-[#5c8494]" strokeWidth={1.5} aria-hidden="true" />
+              </div>
               <p className="text-[#8cc3d4]">No genes match &lsquo;{geneSearch}&rsquo;</p>
               <p className="text-xs text-[#5c8494] mt-1">Try a different name, locus tag, or product keyword</p>
             </Card>
@@ -332,7 +347,7 @@ export default function KnowledgePage() {
                     onClose={() => setSelectedGene(null)}
                   />
                 ) : (
-                  <DetailEmptyState icon="🧬" text="Click a gene to view details" />
+                  <DetailEmptyState icon={Dna} text="Click a gene to view details" />
                 )}
               </div>
             </div>
@@ -485,7 +500,7 @@ export default function KnowledgePage() {
                     </div>
                   </ReferenceDetailPanel>
                 ) : (
-                  <DetailEmptyState icon="🎛️" text="Click a transcription factor to view regulated genes" />
+                  <DetailEmptyState icon={Network} text="Click a transcription factor to view regulated genes" />
                 )}
               </div>
             </div>
@@ -594,7 +609,7 @@ export default function KnowledgePage() {
                     </div>
                   </ReferenceDetailPanel>
                 ) : (
-                  <DetailEmptyState icon="🔄" text="Click a pathway to view its reactions" />
+                  <DetailEmptyState icon={Workflow} text="Click a pathway to view its reactions" />
                 )}
               </div>
             </div>

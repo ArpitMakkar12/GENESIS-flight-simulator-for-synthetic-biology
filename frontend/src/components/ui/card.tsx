@@ -1,4 +1,5 @@
 import React from "react";
+import type { LucideIcon } from "lucide-react";
 
 /* ─── Glass Card ──────────────────────────────────────────── */
 
@@ -38,20 +39,20 @@ export function MetricCard({
   label,
   value,
   color = "cyan",
-  icon,
+  icon: Icon,
   subtitle,
 }: {
   label: string;
   value: string;
   color?: string;
-  icon?: string;
+  icon?: LucideIcon;
   subtitle?: string;
 }) {
   const c = METRIC_COLORS[color] || METRIC_COLORS.cyan;
   return (
     <Card className={`p-4 ${c.glow}`}>
       <div className="flex items-start gap-2">
-        {icon && <span className="text-base mt-0.5">{icon}</span>}
+        {Icon && <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${c.text}`} strokeWidth={1.75} aria-hidden="true" />}
         <div className="flex-1 min-w-0">
           <div className="text-[11px] font-medium text-[#8cc3d4] uppercase tracking-wider mb-1">{label}</div>
           <div className={`text-xl font-semibold font-mono-readout ${c.text} leading-none`}>{value}</div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { FlaskConical, Check, type LucideIcon } from "lucide-react";
 
 /* ─── Spinner ─────────────────────────────────────────────── */
 
@@ -56,7 +57,7 @@ export function LaunchSequence({
     <div className="rounded-xl bg-[#01070c]/80 border border-white/[0.08] p-5 font-mono-readout text-sm leading-[1.75] text-[#8cc3d4]">
       {LAUNCH_STEPS.slice(0, visibleLines).map((line, i) => (
         <div key={i} className="launch-line" style={{ animationDelay: `${i * 0.05}s` }}>
-          <span className="text-[#3ef2ff]">✓</span> {formatLine(line)}
+          <Check className="inline h-3.5 w-3.5 text-[#3ef2ff] align-[-2px]" strokeWidth={2.5} aria-hidden="true" />
         </div>
       ))}
       {visibleLines < LAUNCH_STEPS.length && (
@@ -90,13 +91,13 @@ export function SkeletonRow() {
 /* ─── Empty State ─────────────────────────────────────────── */
 
 export function EmptyState({
-  icon = "\ud83e\uddea",
+  icon: Icon = FlaskConical,
   title,
   description,
   actionLabel,
   actionHref,
 }: {
-  icon?: string;
+  icon?: LucideIcon;
   title: string;
   description?: string;
   actionLabel?: string;
@@ -104,7 +105,9 @@ export function EmptyState({
 }) {
   return (
     <div className="text-center py-12 px-6">
-      <div className="text-4xl mb-3 opacity-60 drop-shadow-[0_0_14px_rgba(62,242,255,0.3)]">{icon}</div>
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#3ef2ff]/10 ring-1 ring-[#3ef2ff]/25 shadow-[0_0_20px_-4px_rgba(62,242,255,0.3)]">
+        <Icon className="h-7 w-7 text-[#7dffef]" strokeWidth={1.5} aria-hidden="true" />
+      </div>
       <h3 className="text-lg font-semibold text-[#d9f7ff] mb-2">{title}</h3>
       {description && <p className="text-sm text-[#8cc3d4] max-w-sm mx-auto mb-4">{description}</p>}
       {actionLabel && actionHref && (

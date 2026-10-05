@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
+import { Settings, Check, TriangleAlert } from "lucide-react";
 
 interface ProcessTraceProps {
   /** Total compute time in milliseconds */
@@ -98,7 +99,7 @@ export function ProcessTrace({
       >
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[#3ef2ff]/[0.08] text-[#3ef2ff] text-xs flex-shrink-0">
-            ⚙
+            <Settings className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <h3 className="text-sm font-medium text-[#d9f7ff]">Simulation Process</h3>
@@ -124,9 +125,9 @@ export function ProcessTrace({
               {/* Status icon */}
               <div className="flex-shrink-0 mt-0.5">
                 {step.status === "done" ? (
-                  <span className="text-[#3ef2ff] text-xs">✓</span>
+                  <Check className="h-3.5 w-3.5 text-[#3ef2ff]" strokeWidth={2.5} aria-hidden="true" />
                 ) : (
-                  <span className="text-[#ffcf66] text-xs">⚠</span>
+                  <TriangleAlert className="h-3.5 w-3.5 text-[#ffcf66]" strokeWidth={2} aria-hidden="true" />
                 )}
               </div>
 

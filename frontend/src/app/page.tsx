@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card, StatusBadge } from "@/components/ui/card";
 import MicroscopeHero from "@/components/microscope-hero";
 import { PRESETS, GENESIS_STATS, presetToSearchParams } from "@/lib/presets";
+import { Dna, FlaskConical, ChartColumn, Blocks, BookOpen } from "lucide-react";
 
 const API = "http://localhost:8000/api/v1";
 
@@ -87,7 +88,9 @@ export default function HomePage() {
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card className="p-5 relative overflow-hidden">
-            <div className="text-2xl mb-2 opacity-80">🧬</div>
+            <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#3ef2ff]/10 ring-1 ring-[#3ef2ff]/20">
+              <Dna className="h-5 w-5 text-[#7dffef]" strokeWidth={1.75} aria-hidden="true" />
+            </div>
             <h3 className="text-sm font-semibold text-[#eaffff] mb-1">1 — Design</h3>
             <p className="text-xs text-[#8cc3d4] leading-relaxed">
               Input a DNA construct or pick from {GENESIS_STATS.parts.value} characterized parts (promoters, RBS, CDS, terminators).
@@ -95,7 +98,9 @@ export default function HomePage() {
             <div className="absolute -bottom-1 -right-1 text-[64px] opacity-[0.03] leading-none">1</div>
           </Card>
           <Card className="p-5 relative overflow-hidden">
-            <div className="text-2xl mb-2 opacity-80">⚗️</div>
+            <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#3ef2ff]/10 ring-1 ring-[#3ef2ff]/20">
+              <FlaskConical className="h-5 w-5 text-[#7dffef]" strokeWidth={1.75} aria-hidden="true" />
+            </div>
             <h3 className="text-sm font-semibold text-[#eaffff] mb-1">2 — Simulate</h3>
             <p className="text-xs text-[#8cc3d4] leading-relaxed">
               Set temperature, pH, oxygen, and carbon source. The FBA solver predicts growth and flux through 40+ pathways.
@@ -103,7 +108,9 @@ export default function HomePage() {
             <div className="absolute -bottom-1 -right-1 text-[64px] opacity-[0.03] leading-none">2</div>
           </Card>
           <Card className="p-5 relative overflow-hidden">
-            <div className="text-2xl mb-2 opacity-80">📊</div>
+            <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#3ef2ff]/10 ring-1 ring-[#3ef2ff]/20">
+              <ChartColumn className="h-5 w-5 text-[#7dffef]" strokeWidth={1.75} aria-hidden="true" />
+            </div>
             <h3 className="text-sm font-semibold text-[#eaffff] mb-1">3 — Analyze</h3>
             <p className="text-xs text-[#8cc3d4] leading-relaxed">
               Compare conditions side by side, see pathway activation, export results as markdown lab reports.
@@ -166,7 +173,7 @@ export default function HomePage() {
           <Link href="/simulate">
             <Card hover className="p-5 h-full flex flex-col">
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-xl">⚗️</span>
+                <FlaskConical className="h-5 w-5 text-[#7dffef]" strokeWidth={1.75} aria-hidden="true" />
                 <h3 className="text-[15px] font-semibold text-[#eaffff]">Simulate</h3>
               </div>
               <p className="text-xs text-[#8cc3d4] leading-relaxed flex-1">
@@ -180,7 +187,7 @@ export default function HomePage() {
           <Link href="/results">
             <Card hover className="p-5 h-full flex flex-col">
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-xl">📊</span>
+                <ChartColumn className="h-5 w-5 text-[#7dffef]" strokeWidth={1.75} aria-hidden="true" />
                 <h3 className="text-[15px] font-semibold text-[#eaffff]">Results</h3>
               </div>
               <div className="flex-1">
@@ -225,7 +232,7 @@ export default function HomePage() {
           <Link href="/parts">
             <Card hover className="p-5 h-full flex flex-col">
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-xl">📦</span>
+                <Blocks className="h-5 w-5 text-[#7dffef]" strokeWidth={1.75} aria-hidden="true" />
                 <h3 className="text-[15px] font-semibold text-[#eaffff]">Parts Library</h3>
               </div>
               <p className="text-xs text-[#8cc3d4] leading-relaxed flex-1">
@@ -238,7 +245,7 @@ export default function HomePage() {
           <Link href="/knowledge">
             <Card hover className="p-5 h-full flex flex-col">
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-xl">🧠</span>
+                <BookOpen className="h-5 w-5 text-[#7dffef]" strokeWidth={1.75} aria-hidden="true" />
                 <h3 className="text-[15px] font-semibold text-[#eaffff]">Knowledge Base</h3>
               </div>
               <p className="text-xs text-[#8cc3d4] leading-relaxed flex-1">

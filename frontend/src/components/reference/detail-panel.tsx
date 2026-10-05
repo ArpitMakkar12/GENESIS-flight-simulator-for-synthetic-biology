@@ -9,7 +9,9 @@
  */
 
 import React from "react";
+import type { LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { X } from "lucide-react";
 
 /* ─── Field state types ─────────────────────────────────── */
 
@@ -80,7 +82,7 @@ export function ReferenceDetailPanel({
           aria-label="Close detail panel"
           className="text-[#5c8494] hover:text-white transition-colors text-lg leading-none ml-3"
         >
-          ✕
+          <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
 
@@ -106,15 +108,17 @@ export function ReferenceDetailPanel({
 /* ─── Empty State ───────────────────────────────────────── */
 
 export function DetailEmptyState({
-  icon,
+  icon: Icon,
   text,
 }: {
-  icon: string;
+  icon: LucideIcon;
   text: string;
 }) {
   return (
     <Card className="p-8 text-center border-dashed">
-      <div className="text-3xl mb-3 opacity-30">{icon}</div>
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#3ef2ff]/[0.06] ring-1 ring-[#3ef2ff]/15">
+        <Icon className="h-6 w-6 text-[#7dffef]/70" strokeWidth={1.5} aria-hidden="true" />
+      </div>
       <p className="text-sm text-[#5c8494]">{text}</p>
     </Card>
   );

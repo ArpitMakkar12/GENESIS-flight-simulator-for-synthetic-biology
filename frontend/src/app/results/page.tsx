@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card, StatusBadge } from "@/components/ui/card";
 import { EmptyState, ErrorBanner } from "@/components/ui/loading";
+import { ChartColumn, Trash2 } from "lucide-react";
 
 const API = "http://localhost:8000/api/v1";
 
@@ -130,7 +131,7 @@ export default function ResultsPage() {
               ))}
               {!loading && filtered.length === 0 && (
                 <tr><td colSpan={7}>
-                  <EmptyState icon="📊" title="No simulations found" description="Run your first simulation to see results here." actionLabel="Go to Simulate" actionHref="/simulate" />
+                  <EmptyState icon={ChartColumn} title="No simulations found" description="Run your first simulation to see results here." actionLabel="Go to Simulate" actionHref="/simulate" />
                 </td></tr>
               )}
               {filtered.map((sim) => (
@@ -150,7 +151,7 @@ export default function ResultsPage() {
                   ) : "—"}</td>
                   <td className="p-3"><StatusBadge status={sim.status} /></td>
                   <td className="p-3 text-center" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(sim.id); }}>
-                    <button className="text-[#5c8494] hover:text-[#ff5a36] transition-colors text-sm p-1" title="Delete">✕</button>
+                    <button className="text-[#5c8494] hover:text-[#ff5a36] transition-colors text-sm p-1" title="Delete"><Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" /></button>
                   </td>
                 </tr>
               ))}
