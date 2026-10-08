@@ -1,6 +1,7 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
+from pydantic import BaseModel, Field
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -97,3 +98,27 @@ async def delete_result(
     await db.delete(sim)
     await db.commit()
 
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[UUID] = Field(..., min_length=1, max_length=500)
+
+
+@router.post("/results/bulk-delete")
+async def bulk_delete_results(
+    body: BulkDeleteRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete many simulations in one transaction.
+
+    Returns the ids that were actually removed, so the UI only drops those
+    rows. Ids that no longer exist are skipped rather than failing the batch.
+    Nothing references simulations, so a plain SQL delete is safe.
+    """
+    result = await db.execute(
+        delete(Simulation)
+        .where(Simulation.id.in_(body.ids))
+        .returning(Simulation.id)
+    )
+    deleted = [str(sim_id) for sim_id in result.scalars().all()]
+    await db.commit()
+    return {"deleted": deleted, "count": len(deleted)}
