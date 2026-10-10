@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Card, StatusBadge } from "@/components/ui/card";
 import { Spinner, ErrorBanner } from "@/components/ui/loading";
-import { exportSimulationMarkdown } from "@/components/export-markdown";
+import { exportSimulationMarkdown, exportSimulationPdf } from "@/components/export-markdown";
+import { PdfButton } from "@/components/pdf-button";
 import { FluxMap } from "@/components/flux-map";
 import { ProcessTrace } from "@/components/process-trace";
 import { Pencil, Check, X } from "lucide-react";
@@ -14,6 +15,7 @@ const API = "http://localhost:8000/api/v1";
 
 interface ExpressionResult {
   gene_id: string;
+  gene_name?: string | null;  // e.g. "pflB", filled in by the backend
   relative_expression: number;
   confidence: number;
   prediction_source?: string; // what the API actually sends ("lookup" | "model" | "fallback")
@@ -33,12 +35,14 @@ interface ExpressionSummary {
 interface FbaResults {
   active_pathways: string[];
   bottlenecks: string[];
+  bottleneck_names?: Record<string, string>;  // reaction id -> readable name
+  pathway_fluxes?: Record<string, number>;
   active_tfs?: string[];
   growth_state?: string;
   solver_status?: string;
   infeasibility_reason?: string | null;
   regulator_state?: Record<string, boolean>;
-  tf_state_changes?: Record<string, unknown>;
+  tf_state_changes?: Record<string, string>;  // regulator -> "on" | "off"
   expression_summary?: ExpressionSummary;
 }
 
@@ -245,6 +249,10 @@ export default function SimulationDetailPage() {
           >
             Export .md
           </button>
+          <PdfButton
+            onExport={() => exportSimulationPdf(sim)}
+            className="px-4 py-2 text-sm rounded-xl bg-white/[0.04] border border-white/[0.07] text-[#eaffff] hover:bg-white/[0.08] transition-colors"
+          />
           <button
             onClick={() => { setDeleteError(null); setConfirmDelete(true); }}
             disabled={deleting}
@@ -363,8 +371,11 @@ export default function SimulationDetailPage() {
           <h3 className="text-sm font-semibold text-amber-300 mb-3">Detected Bottlenecks</h3>
           <div className="flex flex-wrap gap-2">
             {sim.fba_results.bottlenecks.map((b, i) => (
-              <span key={i} className="px-3 py-1 bg-amber-500/20 text-amber-300 rounded text-sm border border-amber-500/30">
+              <span key={i} className="px-3 py-1 bg-amber-500/20 text-amber-300 rounded text-sm border border-amber-500/30" title={sim.fba_results?.bottleneck_names?.[b] ?? b}>
                 {b}
+                {sim.fba_results?.bottleneck_names?.[b] && (
+                  <span className="ml-1.5 text-xs text-amber-200/70">{sim.fba_results.bottleneck_names[b]}</span>
+                )}
               </span>
             ))}
           </div>
@@ -413,7 +424,10 @@ export default function SimulationDetailPage() {
                     fold > 1 ? "text-[#3ef2ff]" : fold < 1 ? "text-amber-300" : "text-[#8cc3d4]";
                   return (
                     <tr key={`${expr.gene_id}-${idx}`} className="border-b border-white/[0.02] last:border-0 hover:bg-white/[0.02]">
-                      <td className="py-3 font-mono-readout text-[#8cc3d4]">{expr.gene_id}</td>
+                      <td className="py-3">
+                        <span className="text-[#eaffff] italic">{expr.gene_name ?? ""}</span>
+                        <span className={`font-mono-readout text-[#8cc3d4] ${expr.gene_name ? "ml-2 text-xs text-[#5c8494]" : ""}`}>{expr.gene_id}</span>
+                      </td>
                       <td className="py-3">
                         {isStub ? (
                           <span className="text-[#5c8494] italic text-xs">model not yet trained</span>

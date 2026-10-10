@@ -6,6 +6,7 @@ import { Card, StatusBadge } from "@/components/ui/card";
 import { EmptyState, ErrorBanner } from "@/components/ui/loading";
 import { ChartColumn, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { runLabel, simTitle, conditionLine, formatDateTime, formatGrowth } from "@/lib/sim-format";
+import { MAX_COMPARE } from "@/lib/pathway-diff";
 
 const API = "http://localhost:8000/api/v1";
 const PAGE_SIZE = 25;
@@ -117,7 +118,7 @@ export default function ResultsPage() {
 
   const closeConfirm = () => { if (!deleting) { setDeleteConfirm(null); setDeleteError(null); } };
 
-  // No cap on selection: compare needs 2-4, delete takes any number.
+  // No cap on selection: compare needs 2 to MAX_COMPARE (4), delete takes any number.
   // Selection is kept while you move between pages.
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -150,7 +151,7 @@ export default function ResultsPage() {
     });
   };
 
-  const canCompare = selectedIds.size >= 2 && selectedIds.size <= 4;
+  const canCompare = selectedIds.size >= 2 && selectedIds.size <= MAX_COMPARE;
   const filtering = !!(filterOxygen || filterCarbon);
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const firstRow = total === 0 ? 0 : page * PAGE_SIZE + 1;
@@ -170,7 +171,7 @@ export default function ResultsPage() {
           {total} {filtering ? "matching" : total === 1 ? "simulation" : "simulations"}
         </span>
       </div>
-      <p className="text-sm text-[#8cc3d4] mb-6">Click a row to view full detail · Select 2–4 to compare, or any number to delete</p>
+      <p className="text-sm text-[#8cc3d4] mb-6">Click a row to view full detail · Select 2–{MAX_COMPARE} to compare, or any number to delete</p>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
@@ -298,7 +299,7 @@ export default function ResultsPage() {
           <div className="max-w-5xl mx-auto flex items-center justify-between">
             <span className="text-sm text-[#8cc3d4]">
               {selectedIds.size} selected
-              {!canCompare && <span className="text-xs text-[#5c8494]"> · compare needs 2–4</span>}
+              {!canCompare && <span className="text-xs text-[#5c8494]"> · compare needs 2–{MAX_COMPARE}</span>}
             </span>
             <div className="flex gap-3">
               <button onClick={() => setSelectedIds(new Set())}

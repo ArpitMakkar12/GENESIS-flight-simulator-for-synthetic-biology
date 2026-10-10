@@ -7,9 +7,39 @@ from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.gene import Gene
+from app.models.reaction import Reaction
 from app.models.simulation import Simulation
 
 router = APIRouter()
+
+# Reaction -> (pathway, readable name). The reactions table never changes
+# while the app runs, so it is read once and kept in memory.
+_reaction_info: dict[str, tuple[str | None, str | None]] | None = None
+
+
+async def _get_reaction_info(db: AsyncSession) -> dict[str, tuple[str | None, str | None]]:
+    global _reaction_info
+    if _reaction_info is None:
+        rows = (await db.execute(select(Reaction.bigg_id, Reaction.subsystem, Reaction.name))).all()
+        _reaction_info = {bigg_id: (subsystem, name) for bigg_id, subsystem, name in rows}
+    return _reaction_info
+
+
+def _pathway_totals(flux_distribution: dict | None, info: dict) -> dict[str, float]:
+    """Total |flux| through every pathway, biggest first.
+
+    The solver only keeps a top-15 list in active_pathways, so a pathway
+    missing from that list may still carry flux. Summing the saved fluxes
+    per pathway gives the full picture, for old runs as well as new ones.
+    """
+    totals: dict[str, float] = {}
+    for rxn_id, flux in (flux_distribution or {}).items():
+        subsystem = (info.get(rxn_id) or (None, None))[0]
+        if not subsystem or subsystem.strip().lower() in ("unassigned", "none"):
+            continue
+        totals[subsystem] = totals.get(subsystem, 0.0) + abs(flux)
+    return {k: round(v, 3) for k, v in sorted(totals.items(), key=lambda kv: -kv[1])}
 
 
 def _iso(dt):
@@ -133,14 +163,32 @@ async def get_result(
 ):
     """Get simulation results by task ID."""
     sim = await _get_or_404(task_id, db)
-    fba = sim.fba_results or {}
+    fba = dict(sim.fba_results or {})
+    info = await _get_reaction_info(db)
+
+    # Full pathway totals (not just the top 15) and readable bottleneck names
+    fba["pathway_fluxes"] = _pathway_totals(sim.flux_distribution, info)
+    fba["bottleneck_names"] = {
+        rxn: (info.get(rxn) or (None, None))[1]
+        for rxn in fba.get("bottlenecks") or []
+        if (info.get(rxn) or (None, None))[1]
+    }
+
+    # Gene names (e.g. b0903 -> pflB) next to the locus tags
+    expression = [dict(e) for e in (sim.expression_results or [])]
+    tags = [e.get("gene_id") for e in expression if e.get("gene_id")]
+    if tags:
+        names = dict((await db.execute(select(Gene.locus_tag, Gene.name).where(Gene.locus_tag.in_(tags)))).all())
+        for e in expression:
+            e.setdefault("gene_name", names.get(e.get("gene_id")) or None)  # "" -> None
+
     return {
         **_summary(sim),
         "growth_state": fba.get("growth_state", sim.status),
         "solver_status": fba.get("solver_status"),
         "infeasibility_reason": fba.get("infeasibility_reason"),
-        "expression_results": sim.expression_results,
-        "fba_results": sim.fba_results,
+        "expression_results": expression or sim.expression_results,
+        "fba_results": fba,
         "flux_distribution": sim.flux_distribution,
         "model_versions": sim.model_versions,
     }

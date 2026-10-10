@@ -5,9 +5,13 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Card, StatusBadge } from "@/components/ui/card";
 import { Spinner, ErrorBanner } from "@/components/ui/loading";
 import { FluxMap } from "@/components/flux-map";
+import { exportComparisonMarkdown, exportComparisonPdf } from "@/components/export-markdown";
+import { PdfButton } from "@/components/pdf-button";
+import { pathwayDiff, fmtPathway, allOf, MAX_COMPARE, type PathwayRow } from "@/lib/pathway-diff";
+import { FLUX_UNIT } from "@/lib/flux-summary";
 import {
   runLabel, simTitle, conditionLine, formatGrowth, GROWTH_UNIT,
-  growthStateLabel, percentOfReference, REFERENCE_GROWTH_RATE, REFERENCE_CONDITION,
+  REFERENCE_GROWTH_RATE, REFERENCE_CONDITION,
 } from "@/lib/sim-format";
 import Link from "next/link";
 
@@ -27,8 +31,15 @@ interface SimDetail {
   compute_time_ms: number | null;
   created_at: string | null;
   completed_at: string | null;
-  expression_results: { gene_id: string; relative_expression: number; confidence: number }[] | null;
-  fba_results: { active_pathways: string[]; bottlenecks: string[] } | null;
+  infeasibility_reason?: string | null;
+  expression_results: { gene_id: string; gene_name?: string | null; relative_expression: number; confidence: number }[] | null;
+  fba_results: {
+    active_pathways: string[];
+    bottlenecks: string[];
+    pathway_fluxes?: Record<string, number> | null;
+    tf_state_changes?: Record<string, string> | null;
+    expression_summary?: { genes_up: number; genes_down: number; total_genes_evaluated: number } | null;
+  } | null;
   flux_distribution: Record<string, number> | null;
   model_versions: Record<string, string> | null;
 }
@@ -102,44 +113,116 @@ function MetricBars({
   );
 }
 
-function exportComparisonMarkdown(sims: SimDetail[]) {
-  const date = new Date().toISOString().split("T")[0];
-  let md = `# Genesis Simulation Comparison (${date})\n\n`;
+/** Column headers shared by the pathway tables: swatch + "A · #145". */
+function RunHeaders({ sims }: { sims: SimDetail[] }) {
+  return (
+    <>
+      {sims.map((sim, i) => (
+        <th key={sim.id} className="p-2 text-right font-medium whitespace-nowrap">
+          <span className="inline-flex items-center gap-1.5">
+            <Swatch color={SIM_COLORS[i]} /> {SIM_LABELS[i]}
+            {sim.run_number != null && <span className="font-mono-readout text-[#5c8494]">{runLabel(sim)}</span>}
+          </span>
+        </th>
+      ))}
+    </>
+  );
+}
 
-  md += `| Metric | ${sims.map((_, i) => `Sim ${SIM_LABELS[i]}`).join(" | ")} |\n`;
-  md += `| --- | ${sims.map(() => "---").join(" | ")} |\n`;
-  md += `| Run | ${sims.map(s => runLabel(s) || s.id.substring(0, 8)).join(" | ")} |\n`;
-  md += `| Name | ${sims.map(s => simTitle(s)).join(" | ")} |\n`;
-  md += `| Vs reference | ${sims.map(s => `${growthStateLabel(s.status)}${percentOfReference(s.growth_rate) != null ? ` (${percentOfReference(s.growth_rate)}%)` : ""}`).join(" | ")} |\n`;
-  md += `| Condition | ${sims.map(s => `${s.temperature}°C · ${s.oxygen_level} · ${s.carbon_source}`).join(" | ")} |\n`;
-  md += `| Growth Rate | ${sims.map(s => s.growth_rate?.toFixed(4) || "N/A").join(" | ")} |\n`;
-  md += `| Doubling Time | ${sims.map(s => s.doubling_time?.toFixed(2) || "N/A").join(" | ")} |\n`;
-  md += `| Viability | ${sims.map(s => s.viability_score ? (s.viability_score * 100).toFixed(1) + "%" : "N/A").join(" | ")} |\n`;
+function PathwayTable({ sims, rows, exact, showRatio }: { sims: SimDetail[]; rows: PathwayRow[]; exact: boolean; showRatio?: boolean }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-white/10 text-xs text-[#8cc3d4]">
+            <th className="p-2 text-left font-medium">Pathway</th>
+            <RunHeaders sims={sims} />
+            {showRatio && <th className="p-2 text-right font-medium" title="Max ÷ min of pathway flux per unit growth">Beyond growth</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const top = Math.max(...row.values);
+            return (
+              <tr key={row.pathway} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.03]">
+                <td className="p-2 text-[#d9f7ff]">{row.pathway}</td>
+                {row.values.map((v, i) => (
+                  <td key={i} className={`p-2 text-right font-mono-readout ${v === top && exact ? "text-[#eaffff] font-semibold" : "text-[#8cc3d4]"}`}>
+                    {fmtPathway(v, exact)}
+                  </td>
+                ))}
+                {showRatio && <td className="p-2 text-right font-mono-readout text-[#8cc3d4]">{row.ratio!.toFixed(1)}×</td>}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-  md += `\n## Pathway Differences\n\n`;
-  
-  if (sims.length === 2) {
-    const p1 = new Set(sims[0].fba_results?.active_pathways || []);
-    const p2 = new Set(sims[1].fba_results?.active_pathways || []);
-    
-    const only1 = Array.from(p1).filter(p => !p2.has(p));
-    const only2 = Array.from(p2).filter(p => !p1.has(p));
-    const shared = Array.from(p1).filter(p => p2.has(p));
+/**
+ * Same layout for 2, 3 or 4 runs:
+ *   - switched on/off: pathways with flux in some runs and none in others
+ *   - biggest changes: running everywhere but at very different levels
+ *   - the shared rest, folded away
+ */
+function PathwayDifferences({ sims }: { sims: SimDetail[] }) {
+  const diff = pathwayDiff(sims);
+  const n = sims.length;
+  return (
+    <Card className="p-6 bg-[#01070c] border-[#5c8494]/30 space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold">Pathway Differences</h2>
+        <p className="text-sm text-[#8cc3d4] mt-1">
+          {diff.shared.length} pathways run in {allOf(n)} · {diff.switched.length} switched on/off
+          {diff.exact && ` · ${diff.bigChanges.length} shifted beyond what growth explains`}
+        </p>
+        {!diff.exact && (
+          <p className="text-xs text-amber-300/80 mt-2">
+            Some of these runs have no saved fluxes, so this falls back to their top-15 pathway lists: ✓ means listed, which is not the same as switched on.
+          </p>
+        )}
+      </div>
 
-    md += `### Only in Sim A\n${only1.map(p => `- ${p}`).join("\n") || "None"}\n\n`;
-    md += `### Only in Sim B\n${only2.map(p => `- ${p}`).join("\n") || "None"}\n\n`;
-    md += `### Shared\n${shared.map(p => `- ${p}`).join("\n") || "None"}\n\n`;
-  } else {
-    md += `Pathway differences are optimized for comparing 2 simulations.\n\n`;
-  }
+      <section>
+        <h3 className="text-sm font-semibold text-[#d9f7ff]">Switched on or off</h3>
+        <p className="text-xs text-[#5c8494] mb-2">
+          {diff.exact ? `Total flux through each pathway (${FLUX_UNIT}); — means no flux. Highest value in bold.` : "Listed in the run's top-15 pathways."}
+        </p>
+        {diff.switched.length > 0
+          ? <PathwayTable sims={sims} rows={diff.switched} exact={diff.exact} />
+          : <p className="text-sm text-[#5c8494]">None — every pathway runs in {allOf(n)} simulations.</p>}
+      </section>
 
-  const blob = new Blob([md], { type: "text/markdown" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `genesis-comparison-${date}.md`;
-  a.click();
-  URL.revokeObjectURL(url);
+      {diff.exact && (
+        <section>
+          <h3 className="text-sm font-semibold text-[#d9f7ff]">Biggest changes among shared pathways</h3>
+          <p className="text-xs text-[#5c8494] mb-2">
+            {diff.growthAdjusted
+              ? "Running in every simulation, but differing at least 2× even after allowing for growth (a faster-growing cell builds more of everything). Values are raw totals; the last column is the growth-adjusted difference."
+              : "Running in every simulation, but the busiest carries at least twice the flux of the quietest."}
+          </p>
+          {diff.bigChanges.length > 0
+            ? <PathwayTable sims={sims} rows={diff.bigChanges} exact showRatio />
+            : <p className="text-sm text-[#5c8494]">No shared pathway differs by 2× or more beyond the growth difference.</p>}
+        </section>
+      )}
+
+      {diff.shared.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer text-sm text-[#8cc3d4] hover:text-[#eaffff]">
+            Running in {allOf(n)} simulations ({diff.shared.length})
+          </summary>
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {diff.shared.map((p) => (
+              <span key={p} className="px-2.5 py-0.5 text-[11px] rounded-full border border-white/[0.08] bg-white/[0.03] text-[#8cc3d4]">{p}</span>
+            ))}
+          </div>
+        </details>
+      )}
+    </Card>
+  );
 }
 
 function CompareContent() {
@@ -158,7 +241,7 @@ function CompareContent() {
       return;
     }
 
-    const ids = idsParam.split(",").slice(0, 4);
+    const ids = idsParam.split(",").slice(0, MAX_COMPARE);
     if (ids.length < 2) {
       setError("Need at least 2 simulations to compare.");
       setLoading(false);
@@ -240,12 +323,18 @@ function CompareContent() {
           <span>&larr;</span> Results
         </Link>
         <h1 className="text-xl font-semibold">Comparing {sims.length} simulations</h1>
-        <button
-          onClick={() => exportComparisonMarkdown(sims)}
-          className="px-4 py-2 bg-[#b98bff]/20 text-[#b98bff] rounded hover:bg-[#b98bff]/30 transition-colors border border-[#b98bff]/50"
-        >
-          Export .md
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => exportComparisonMarkdown(sims, SIM_LABELS)}
+            className="px-4 py-2 bg-[#b98bff]/20 text-[#d4bcff] rounded-xl hover:bg-[#b98bff]/30 transition-colors border border-[#b98bff]/50"
+          >
+            Export .md
+          </button>
+          <PdfButton
+            onExport={() => exportComparisonPdf(sims, SIM_LABELS)}
+            className="px-4 py-2 bg-[#b98bff]/20 text-[#d4bcff] rounded-xl hover:bg-[#b98bff]/30 transition-colors border border-[#b98bff]/50"
+          />
+        </div>
       </div>
 
       {/* Conditions Strip */}
@@ -308,48 +397,8 @@ function CompareContent() {
         </div>
       </div>
 
-      {/* Pathway Differences */}
-      <Card className="p-6 bg-[#01070c] border-[#5c8494]/30">
-        <h2 className="text-lg font-semibold mb-4">Pathway Differences</h2>
-        {sims.length === 2 ? (() => {
-          const p1 = new Set(sims[0].fba_results?.active_pathways || []);
-          const p2 = new Set(sims[1].fba_results?.active_pathways || []);
-          const only1 = Array.from(p1).filter(p => !p2.has(p));
-          const only2 = Array.from(p2).filter(p => !p1.has(p));
-          const shared = Array.from(p1).filter(p => p2.has(p));
-
-          return (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <h3 className="mb-3 font-semibold pb-2 border-b border-white/10 text-[#eaffff] flex items-center gap-1.5"><Swatch color={SIM_COLORS[0]} /> Only in Sim A</h3>
-                {only1.length > 0 ? (
-                  <ul className="space-y-1 text-sm text-[#8cc3d4]">
-                    {only1.map(p => <li key={p}>&bull; {p}</li>)}
-                  </ul>
-                ) : <div className="text-sm text-[#5c8494]">None</div>}
-              </div>
-              <div>
-                <h3 className="mb-3 font-semibold pb-2 border-b border-white/10 text-[#eaffff] flex items-center gap-1.5"><Swatch color={SIM_COLORS[1]} /> Only in Sim B</h3>
-                {only2.length > 0 ? (
-                  <ul className="space-y-1 text-sm text-[#8cc3d4]">
-                    {only2.map(p => <li key={p}>&bull; {p}</li>)}
-                  </ul>
-                ) : <div className="text-sm text-[#5c8494]">None</div>}
-              </div>
-              <div>
-                <h3 className="mb-3 font-semibold pb-2 border-b border-[#5c8494]/30 text-[#eaffff]">Shared</h3>
-                {shared.length > 0 ? (
-                  <ul className="space-y-1 text-sm text-[#8cc3d4]">
-                    {shared.map(p => <li key={p}>&bull; {p}</li>)}
-                  </ul>
-                ) : <div className="text-sm text-[#5c8494]">None</div>}
-              </div>
-            </div>
-          );
-        })() : (
-          <div className="text-sm text-[#5c8494]">Pathway difference view is optimized for 2 simulations. {sims.length > 2 && "Detailed differences omitted for >2 sims."}</div>
-        )}
-      </Card>
+      {/* Pathway Differences (works for 2, 3 or 4 runs) */}
+      <PathwayDifferences sims={sims} />
     </div>
   );
 }
