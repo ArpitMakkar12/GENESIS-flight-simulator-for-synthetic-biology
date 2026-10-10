@@ -206,10 +206,11 @@ function CompareContent() {
                 <span className="font-semibold" style={{ color: SIM_COLORS[i] }}>Sim {SIM_LABELS[i]} Map</span>
               </div>
               <FluxMap
-                oxygenLevel={sim.oxygen_level as "aerobic" | "anaerobic" | "microaerobic"}
+                carbonSource={sim.carbon_source}
                 growthRate={sim.growth_rate}
                 conditionLabel={`Sim ${SIM_LABELS[i]}: ${sim.temperature}°C · ${sim.oxygen_level} · ${sim.carbon_source}`}
                 activePathways={sim.fba_results?.active_pathways || []}
+                fluxDistribution={sim.flux_distribution}
               />
             </div>
           ))}

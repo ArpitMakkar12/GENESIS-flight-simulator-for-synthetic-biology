@@ -244,7 +244,7 @@ export default function SimulationDetailPage() {
       <div className="mt-8">
         <h2 className="text-lg font-medium text-[#eaffff] mb-4">Metabolic Flux</h2>
         <FluxMap
-          oxygenLevel={sim.oxygen_level as "aerobic" | "anaerobic" | "microaerobic"}
+          carbonSource={sim.carbon_source}
           growthRate={sim.growth_rate}
           conditionLabel={conditionSummary}
           activePathways={sim.fba_results?.active_pathways || []}
