@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, Sequence, func, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, deferred
 
 from app.database import Base
 
@@ -40,6 +40,7 @@ class Simulation(Base):
 
     # Results (stored as JSONB for flexibility)
     expression_results: Mapped[dict | None] = mapped_column(JSONB)
+    expression_all: Mapped[dict | None] = deferred(mapped_column(JSONB, nullable=True))
     fba_results: Mapped[dict | None] = mapped_column(JSONB)
     flux_distribution: Mapped[dict | None] = mapped_column(JSONB)
     confidence_scores: Mapped[dict | None] = mapped_column(JSONB)

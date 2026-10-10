@@ -270,6 +270,7 @@ class SimulationRunner:
             "active_pathways": fba_result.active_pathways,
             "bottlenecks": fba_result.bottlenecks,
             "expression_predictions": top_predictions,
+            "expression_all": all_predictions,
             # B5: changed-gene counts, split by direction
             "expression_summary": {
                 "total_genes_evaluated": len(all_predictions),

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Settings, Check, TriangleAlert } from "lucide-react";
+import { growthStateLabel, percentOfReference, GROWTH_UNIT } from "@/lib/sim-format";
 
 interface ProcessTraceProps {
   /** Total compute time in milliseconds */
@@ -15,12 +16,12 @@ interface ProcessTraceProps {
   oxygenLevel?: string;
   carbonSource?: string;
   nitrogenSource?: string;
-  /** Simulation status */
-  status?: string;
+  /** Growth state from the backend: optimal / slowed / stressed / not-viable */
+  growthState?: string;
   /** Growth rate result */
   growthRate?: number | null;
-  /** Active pathways count */
-  activePathwayCount?: number;
+  /** How many pathways carry any flux */
+  pathwayCount?: number;
   /** Expression prediction count */
   expressionCount?: number;
 }
@@ -33,9 +34,9 @@ export function ProcessTrace({
   oxygenLevel = "aerobic",
   carbonSource = "glucose",
   nitrogenSource = "ammonium",
-  status = "optimal",
+  growthState = "optimal",
   growthRate,
-  activePathwayCount = 0,
+  pathwayCount = 0,
   expressionCount = 0,
 }: ProcessTraceProps) {
   const [expanded, setExpanded] = useState(false);
@@ -66,9 +67,13 @@ export function ProcessTrace({
       status: "done" as const,
     },
     {
-      label: `Solution: ${status}`,
-      detail: growthRate != null ? `μ = ${growthRate} h⁻¹` : "no feasible solution",
-      status: status === "optimal" ? ("done" as const) : ("warn" as const),
+      // Same wording as the badge above: "Much slower", not the raw "stressed"
+      label: `Result: ${growthStateLabel(growthState)}`,
+      detail:
+        growthRate != null && growthRate > 0
+          ? `μ = ${growthRate.toFixed(3)} ${GROWTH_UNIT} · ${percentOfReference(growthRate)}% of reference growth`
+          : "no growth: the model found no feasible solution",
+      status: growthState === "optimal" || growthState === "slowed" ? ("done" as const) : ("warn" as const),
     },
   ];
 
@@ -76,14 +81,14 @@ export function ProcessTrace({
   if (expressionCount > 0) {
     steps.push({
       label: `Expression predictions`,
-      detail: `${expressionCount} genes evaluated`,
+      detail: `${expressionCount.toLocaleString()} genes evaluated`,
       status: "done" as const,
     });
   }
-  if (activePathwayCount > 0) {
+  if (pathwayCount > 0) {
     steps.push({
       label: `Pathway analysis`,
-      detail: `${activePathwayCount} active pathways identified`,
+      detail: `${pathwayCount} pathways carry flux`,
       status: "done" as const,
     });
   }

@@ -85,6 +85,15 @@ async def run_simulation(
         nitrogen_source=request.nitrogen_source,
         status=result["growth_state"],
         expression_results=result.get("expression_predictions"),
+        expression_all={
+            p["gene_id"]: [
+                round(p["relative_expression"], 4),
+                round(p["confidence"], 3),
+                p.get("prediction_source"),
+                p.get("reference_tpm"),
+            ]
+            for p in result.get("expression_all") or []
+        } or None,
         fba_results={
             "solver_status": result.get("solver_status"),
             "growth_state": result.get("growth_state"),

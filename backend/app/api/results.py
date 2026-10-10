@@ -4,7 +4,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+import math
+
 from sqlalchemy import select, func, delete, or_
+from sqlalchemy.orm import undefer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -242,6 +245,102 @@ async def get_result(
         "fba_results": fba,
         "flux_distribution": sim.flux_distribution,
         "model_versions": sim.model_versions,
+    }
+
+
+# Fold changes within this distance of 1.0 count as unchanged
+_UNCHANGED = 0.01
+
+
+@router.get("/results/{task_id}/genes")
+async def search_genes(
+    task_id: UUID,
+    q: Optional[str] = Query(None, max_length=50, description="Gene name or locus tag, e.g. 'nuo', 'pflB', 'b0903'"),
+    direction: Literal["up", "down", "all"] = "all",
+    limit: int = Query(10, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """Gene predictions for one run, searchable and paged.
+
+    New runs search every gene the model scored (~1,500). Runs made before
+    that was saved only have their 50 most-changed genes; `complete` tells
+    the UI which case it is.
+
+    Most-changed genes come first (largest fold change either way), then the
+    most abundant (reference TPM), so the biologically loudest lead.
+    """
+    sim = (await db.execute(
+        select(Simulation).options(undefer(Simulation.expression_all)).where(Simulation.id == task_id)
+    )).scalar_one_or_none()
+    if not sim:
+        raise HTTPException(status_code=404, detail=f"Simulation '{task_id}' not found")
+
+    # One row per gene: (gene_id, fold, confidence, source, reference_tpm)
+    if sim.expression_all:
+        complete = True
+        rows = [(gid, v[0], v[1], v[2], v[3]) for gid, v in sim.expression_all.items()]
+    else:
+        complete = False
+        rows = [
+            (e.get("gene_id"), e.get("relative_expression", 1.0), e.get("confidence"),
+             e.get("prediction_source") or e.get("source"), e.get("reference_tpm"))
+            for e in (sim.expression_results or []) if e.get("gene_id")
+        ]
+
+    # The custom DNA part is shown pinned above the table, not in the list
+    rows = [r for r in rows if not str(r[0]).startswith("custom_part")]
+
+    # If every gene shares one confidence / source, the UI says it once
+    # instead of repeating the same value in a column on every row
+    confs = {r[2] for r in rows}
+    sources = {r[3] for r in rows}
+
+    # Names for every gene in this run (one query; the genes table is indexed)
+    ids = [r[0] for r in rows]
+    names: dict[str, str | None] = dict(
+        (await db.execute(select(Gene.locus_tag, Gene.name).where(Gene.locus_tag.in_(ids)))).all()
+    ) if ids else {}
+
+    if q and q.strip():
+        needle = q.strip().lower()
+        rows = [r for r in rows if needle in r[0].lower() or needle in (names.get(r[0]) or "").lower()]
+
+    counts = {
+        "up": sum(1 for r in rows if r[1] > 1 + _UNCHANGED),
+        "down": sum(1 for r in rows if r[1] < 1 - _UNCHANGED),
+        "all": len(rows),
+    }
+    if direction == "up":
+        rows = [r for r in rows if r[1] > 1 + _UNCHANGED]
+    elif direction == "down":
+        rows = [r for r in rows if r[1] < 1 - _UNCHANGED]
+
+    def strength(r) -> float:
+        fold = r[1] if r[1] and r[1] > 0 else 1.0
+        return abs(math.log2(fold))
+
+    rows.sort(key=lambda r: (-strength(r), -(r[4] or 0), r[0]))
+    page = rows[offset: offset + limit]
+
+    return {
+        "items": [
+            {
+                "gene_id": gid,
+                "gene_name": names.get(gid) or None,
+                "relative_expression": fold,
+                "confidence": conf,
+                "prediction_source": source,
+                "reference_tpm": tpm,
+            }
+            for gid, fold, conf, source, tpm in page
+        ],
+        "total": len(rows),
+        "counts": counts,          # up / down / all among the matches (before the direction filter)
+        "complete": complete,      # False = only the saved top 50 could be searched
+        "searched": len(ids),      # how many genes were searched
+        "uniform_confidence": next(iter(confs)) if len(confs) == 1 else None,
+        "uniform_source": next(iter(sources)) if len(sources) == 1 else None,
     }
 
 

@@ -8,29 +8,13 @@ import { exportSimulationMarkdown, exportSimulationPdf } from "@/components/expo
 import { PdfButton } from "@/components/pdf-button";
 import { FluxMap } from "@/components/flux-map";
 import { ProcessTrace } from "@/components/process-trace";
+import { GeneExpression, type GeneRow, type ExpressionSummary } from "@/components/gene-expression";
 import { Pencil, Check, X } from "lucide-react";
 import { runLabel, simTitle, autoTitle, fullTitle, conditionLine, formatDateTime, formatGrowth, GROWTH_UNIT, percentOfReference, REFERENCE_CONDITION } from "@/lib/sim-format";
 
 const API = "http://localhost:8000/api/v1";
 
-interface ExpressionResult {
-  gene_id: string;
-  gene_name?: string | null;  // e.g. "pflB", filled in by the backend
-  relative_expression: number;
-  confidence: number;
-  prediction_source?: string; // what the API actually sends ("lookup" | "model" | "fallback")
-  source?: string;            // legacy field name, kept for older stored results
-  reference_tpm?: number | null;
-  rbs_score?: number | null;
-}
-
-interface ExpressionSummary {
-  genes_up: number;
-  genes_down: number;
-  total_genes_evaluated: number;
-  genes_with_changed_expression: number;
-  genes_by_source?: Record<string, number>;
-}
+type ExpressionResult = GeneRow;
 
 interface FbaResults {
   active_pathways: string[];
@@ -43,7 +27,7 @@ interface FbaResults {
   infeasibility_reason?: string | null;
   regulator_state?: Record<string, boolean>;
   tf_state_changes?: Record<string, string>;  // regulator -> "on" | "off"
-  expression_summary?: ExpressionSummary;
+  expression_summary?: ExpressionSummary & { genes_by_source?: Record<string, number> };
 }
 
 interface SimulationDetail {
@@ -69,12 +53,6 @@ interface SimulationDetail {
   compute_time_ms: number;
   created_at: string;
   completed_at: string;
-}
-
-/** Fold change as "2.00×" / "0.375×" — clearer than a percentage for regulation. */
-function formatFold(value: number): string {
-  if (value >= 1) return `${value.toFixed(2)}×`;
-  return `${value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}×`;
 }
 
 export default function SimulationDetailPage() {
@@ -347,9 +325,9 @@ export default function SimulationDetailPage() {
         oxygenLevel={sim.oxygen_level}
         carbonSource={sim.carbon_source}
         nitrogenSource={sim.nitrogen_source}
-        status={sim.status}
+        growthState={growthState}
         growthRate={sim.growth_rate}
-        activePathwayCount={sim.fba_results?.active_pathways?.length || 0}
+        pathwayCount={Object.keys(sim.fba_results?.pathway_fluxes ?? {}).length || sim.fba_results?.active_pathways?.length || 0}
         expressionCount={summary?.total_genes_evaluated ?? expressionResults.length}
       />
 
@@ -382,79 +360,12 @@ export default function SimulationDetailPage() {
         </Card>
       )}
 
-      {/* Expression Predictions */}
-      <Card className="p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
-          <h3 className="text-sm font-semibold text-[#d9f7ff]">Expression Predictions</h3>
-          {summary && (
-            <span className="text-xs text-[#5c8494] font-mono-readout">
-              {summary.genes_up.toLocaleString()} up · {summary.genes_down.toLocaleString()} down ·{" "}
-              {summary.total_genes_evaluated.toLocaleString()} evaluated
-              {expressionResults.length > 0 && expressionResults.length < summary.genes_with_changed_expression
-                ? ` · showing top ${expressionResults.length}`
-                : ""}
-            </span>
-          )}
-        </div>
-
-        {expressionResults.length === 0 ? (
-          <p className="text-[#5c8494] text-sm italic">
-            {summary?.total_genes_evaluated
-              ? `No genes changed vs reference — all ${summary.total_genes_evaluated.toLocaleString()} evaluated genes are at 1.0×.`
-              : "No expression predictions available for this simulation."}
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-white/[0.07] text-[#5c8494] text-xs uppercase tracking-wider">
-                  <th className="pb-2 font-medium">Gene</th>
-                  <th className="pb-2 font-medium">Fold vs Reference</th>
-                  <th className="pb-2 font-medium">Reference TPM</th>
-                  <th className="pb-2 font-medium">Confidence</th>
-                  <th className="pb-2 font-medium">Source</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {expressionResults.map((expr, idx) => {
-                  const source = expr.prediction_source ?? expr.source ?? "prediction";
-                  const isStub = expr.confidence === 0 && source === "stub";
-                  const fold = expr.relative_expression;
-                  const foldColor =
-                    fold > 1 ? "text-[#3ef2ff]" : fold < 1 ? "text-amber-300" : "text-[#8cc3d4]";
-                  return (
-                    <tr key={`${expr.gene_id}-${idx}`} className="border-b border-white/[0.02] last:border-0 hover:bg-white/[0.02]">
-                      <td className="py-3">
-                        <span className="text-[#eaffff] italic">{expr.gene_name ?? ""}</span>
-                        <span className={`font-mono-readout text-[#8cc3d4] ${expr.gene_name ? "ml-2 text-xs text-[#5c8494]" : ""}`}>{expr.gene_id}</span>
-                      </td>
-                      <td className="py-3">
-                        {isStub ? (
-                          <span className="text-[#5c8494] italic text-xs">model not yet trained</span>
-                        ) : (
-                          <span className={`${foldColor} font-mono-readout`}>
-                            {fold > 1 ? "▲ " : fold < 1 ? "▼ " : ""}
-                            {formatFold(fold)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 font-mono-readout text-[#5c8494]">
-                        {expr.reference_tpm != null ? expr.reference_tpm.toLocaleString() : "-"}
-                      </td>
-                      <td className="py-3">
-                        {isStub ? "-" : (
-                          <span className="text-[#7dffef] font-mono-readout">{(expr.confidence * 100).toFixed(0)}%</span>
-                        )}
-                      </td>
-                      <td className="py-3 text-[#5c8494]">{source}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+      {/* Expression Predictions: tabs, search over every gene, short list */}
+      <GeneExpression
+        simId={sim.id}
+        summary={summary}
+        customPart={expressionResults.find((e) => e.gene_id.startsWith("custom_part"))}
+      />
 
       {/* Raw Output Toggle */}
       <Card className="!p-0 overflow-hidden mt-6">
