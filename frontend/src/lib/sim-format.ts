@@ -61,3 +61,42 @@ export function formatGrowth(value: number | null | undefined, withUnit = true):
   if (value == null) return "—";
   return withUnit ? `${value.toFixed(3)} ${GROWTH_UNIT}` : value.toFixed(3);
 }
+
+/* ─── Growth state wording ─────────────────────────────────────────
+ * The backend stores growth_state as optimal / slowed / stressed / not-viable,
+ * judged against ONE reference run (glucose, aerobic, 37 °C, pH 7).
+ * "stressed" sounded like something was wrong, but acetate, anaerobic and
+ * microaerobic runs are naturally slower than that reference without being
+ * stressed. So the UI shows what the label actually measures.
+ * The stored values are unchanged, so old runs and the API keep working.
+ */
+
+/** Growth under the reference condition. Keep in sync with
+ *  REFERENCE_GROWTH_RATE in backend/app/services/simulation_runner.py */
+export const REFERENCE_GROWTH_RATE = 0.802;
+export const REFERENCE_CONDITION = "glucose · aerobic · 37 °C · pH 7";
+
+const GROWTH_STATE_LABELS: Record<string, string> = {
+  optimal: "near reference", // ≥ 90% of reference (includes faster)
+  slowed: "slower",          // 50–90%
+  stressed: "much slower",   // < 50%
+  "not-viable": "no growth", // solver found no growth
+};
+
+/** Words to show for a stored growth state ("stressed" → "much slower"). */
+export function growthStateLabel(state: string | null | undefined): string {
+  if (!state) return "—";
+  return GROWTH_STATE_LABELS[state] ?? state;
+}
+
+/** Growth as a whole-number percent of the reference, e.g. 28. */
+export function percentOfReference(growth: number | null | undefined): number | null {
+  if (growth == null) return null;
+  return Math.round((growth / REFERENCE_GROWTH_RATE) * 100);
+}
+
+/** One sentence for tooltips: "28% of reference growth (glucose · aerobic · 37 °C · pH 7)". */
+export function referenceNote(growth: number | null | undefined): string {
+  const pct = percentOfReference(growth);
+  return pct == null ? "" : `${pct}% of reference growth (${REFERENCE_CONDITION})`;
+}

@@ -204,7 +204,7 @@ export default function ResultsPage() {
                 <th className={thSort} onClick={() => toggleSort("created_at")}>Date{sortIcon("created_at")}</th>
                 <th className={thSort} onClick={() => toggleSort("growth_rate")}>Growth{sortIcon("growth_rate")}</th>
                 <th className={thSort} onClick={() => toggleSort("viability_score")}>Viability{sortIcon("viability_score")}</th>
-                <th className="text-left p-3 font-medium uppercase tracking-wider">Status</th>
+                <th className="text-left p-3 font-medium uppercase tracking-wider" title="Growth compared with the reference run: glucose · aerobic · 37 °C · pH 7">Vs reference</th>
                 <th className="p-3 w-10"></th>
               </tr>
             </thead>
@@ -242,7 +242,7 @@ export default function ResultsPage() {
                   <td className="p-3">{sim.viability_score != null ? (
                     <span className={sim.viability_score > 0.5 ? "text-[#7dffef]" : "text-[#ff8b6e]"}>{(sim.viability_score * 100).toFixed(0)}%</span>
                   ) : "—"}</td>
-                  <td className="p-3"><StatusBadge status={sim.status} /></td>
+                  <td className="p-3"><StatusBadge status={sim.status} growthRate={sim.growth_rate} /></td>
                   <td className="p-3 text-center" onClick={(e) => { e.stopPropagation(); setDeleteConfirm([sim.id]); }}>
                     <button className="text-[#5c8494] hover:text-[#ff5a36] transition-colors text-sm p-1" title="Delete" aria-label={`Delete ${runLabel(sim)}`}>
                       <Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />

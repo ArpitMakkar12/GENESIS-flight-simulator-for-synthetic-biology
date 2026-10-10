@@ -1,4 +1,4 @@
-import { fullTitle, runLabel, simTitle, formatDateTime, formatGrowth } from "@/lib/sim-format";
+import { fullTitle, runLabel, simTitle, formatDateTime, formatGrowth, growthStateLabel, referenceNote } from "@/lib/sim-format";
 
 /**
  * Export a simulation result as Notion-compatible Markdown.
@@ -32,7 +32,7 @@ export function exportSimulationMarkdown(sim: ExportableSim) {
     `# GENESIS Simulation Report — ${fullTitle(sim)}`,
     ``,
     `**Date:** ${date}`,
-    `**Status:** ${sim.status}`,
+    `**Growth vs reference:** ${growthStateLabel(sim.status)}${sim.growth_rate != null ? ` (${referenceNote(sim.growth_rate)})` : ""}`,
     `**Model:** ${sim.model_versions?.predictor || "unknown"}`,
     `**Compute Time:** ${sim.compute_time_ms ?? "N/A"} ms`,
     ``,
@@ -142,7 +142,7 @@ export function exportComparisonMarkdown(sims: ExportableSim[]) {
     `| Growth Rate | ${sims.map((s) => formatGrowth(s.growth_rate)).join(" | ")} |`,
     `| Doubling Time | ${sims.map((s) => s.doubling_time != null ? `${s.doubling_time.toFixed(2)} h` : "N/A").join(" | ")} |`,
     `| Viability | ${sims.map((s) => s.viability_score != null ? `${(s.viability_score * 100).toFixed(0)}%` : "N/A").join(" | ")} |`,
-    `| Status | ${sims.map((s) => s.status).join(" | ")} |`,
+    `| Vs reference | ${sims.map((s) => growthStateLabel(s.status)).join(" | ")} |`,
     ``,
   ];
 

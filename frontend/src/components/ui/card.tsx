@@ -1,5 +1,6 @@
 import React from "react";
 import type { LucideIcon } from "lucide-react";
+import { growthStateLabel, referenceNote } from "@/lib/sim-format";
 
 /* ─── Glass Card ──────────────────────────────────────────── */
 
@@ -74,11 +75,20 @@ const STATUS_STYLES: Record<string, string> = {
   running: "bg-[#b98bff]/10 text-[#d4bcff] border-[#b98bff]/25",
 };
 
-export function StatusBadge({ status }: { status: string }) {
+/**
+ * Coloured pill for a run's state. Growth states show friendlier words
+ * ("stressed" → "much slower", see growthStateLabel); pass growthRate to get
+ * a hover note like "28% of reference growth (...)".
+ */
+export function StatusBadge({ status, growthRate }: { status: string; growthRate?: number | null }) {
   const style = STATUS_STYLES[status] || STATUS_STYLES.stalled;
+  const note = referenceNote(growthRate);
   return (
-    <span className={`inline-flex px-2.5 py-0.5 text-[11px] font-medium rounded-full border ${style}`}>
-      {status}
+    <span
+      className={`inline-flex px-2.5 py-0.5 text-[11px] font-medium rounded-full border whitespace-nowrap ${style}`}
+      title={note || undefined}
+    >
+      {growthStateLabel(status)}
     </span>
   );
 }

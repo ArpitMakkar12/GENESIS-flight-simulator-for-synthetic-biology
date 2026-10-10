@@ -202,7 +202,7 @@ export default function HomePage() {
                         className="flex items-center justify-between text-xs"
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <StatusBadge status={sim.status} />
+                          <StatusBadge status={sim.status} growthRate={sim.growth_rate} />
                           <span className="font-mono-readout text-[#5c8494]">{runLabel(sim)}</span>
                           <span className="text-[#8cc3d4] truncate">{simTitle(sim)}</span>
                         </div>

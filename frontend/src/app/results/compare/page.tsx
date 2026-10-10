@@ -2,11 +2,13 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Card, StatusBadge } from "@/components/ui/card";
 import { Spinner, ErrorBanner } from "@/components/ui/loading";
 import { FluxMap } from "@/components/flux-map";
-import { runLabel, simTitle, conditionLine, formatGrowth, GROWTH_UNIT } from "@/lib/sim-format";
+import {
+  runLabel, simTitle, conditionLine, formatGrowth, GROWTH_UNIT,
+  growthStateLabel, percentOfReference, REFERENCE_GROWTH_RATE, REFERENCE_CONDITION,
+} from "@/lib/sim-format";
 import Link from "next/link";
 
 interface SimDetail {
@@ -31,8 +33,74 @@ interface SimDetail {
   model_versions: Record<string, string> | null;
 }
 
-const SIM_COLORS = ["#3ef2ff", "#b98bff", "#ffcf66", "#7dffef"];
+/* One colour per compared run: cyan, violet, amber, pink.
+ * Checked with a colour-blindness validator on this dark background: every
+ * pair stays distinguishable (the old set had two near-identical cyans). */
+const SIM_COLORS = ["#0fa0b4", "#9b6ff1", "#b98a10", "#e05a88"];
 const SIM_LABELS = ["A", "B", "C", "D"];
+
+/** Small coloured square that ties a label to its run's colour (text stays white). */
+function Swatch({ color }: { color: string }) {
+  return <span className="inline-block h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: color }} aria-hidden="true" />;
+}
+
+interface BarRow {
+  key: string;
+  label: string;      // "Sim A · #60"
+  title: string;      // full run title, shown on hover
+  color: string;
+  value: number | null;
+  display: string;    // text printed at the end of the bar
+}
+
+/**
+ * One metric = one small chart with its own scale.
+ * (The old chart put growth ≈ 0.6 and viability = 100 on the same axis, so
+ * growth bars were nearly invisible.) Bars are thin, labelled with their value,
+ * and an optional reference line marks the baseline condition.
+ */
+function MetricBars({
+  title, subtitle, rows, max, reference,
+}: {
+  title: string;
+  subtitle: string;
+  rows: BarRow[];
+  max: number;
+  reference?: { value: number; label: string };
+}) {
+  const pct = (v: number) => `${Math.max(0, Math.min(100, (v / max) * 100))}%`;
+  return (
+    <Card className="p-5 bg-[#01070c] border-[#5c8494]/30">
+      <h3 className="text-sm font-semibold text-[#eaffff]">{title}</h3>
+      <p className="text-xs text-[#5c8494] mb-4">{subtitle}</p>
+      <div className="space-y-3">
+        {rows.map((r) => (
+          <div key={r.key} className="group" title={`${r.title}: ${r.display}`}>
+            <div className="flex items-center justify-between gap-2 text-xs mb-1">
+              <span className="flex items-center gap-1.5 text-[#8cc3d4] truncate">
+                <Swatch color={r.color} /> {r.label}
+              </span>
+              <span className="font-mono-readout text-[#eaffff] shrink-0">{r.display}</span>
+            </div>
+            <div className="relative h-3 rounded-sm bg-white/[0.04] group-hover:bg-white/[0.07] transition-colors">
+              {r.value != null && r.value > 0 && (
+                <div className="absolute inset-y-0 left-0 rounded-r" style={{ width: pct(r.value), backgroundColor: r.color }} />
+              )}
+              {reference && (
+                <div className="absolute -inset-y-1 w-px bg-[#8cc3d4]/70" style={{ left: pct(reference.value) }} aria-hidden="true" />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {reference && (
+        <p className="mt-3 text-[11px] text-[#5c8494] flex items-center gap-1.5">
+          <span className="inline-block h-3 w-px bg-[#8cc3d4]/70" aria-hidden="true" /> {reference.label}
+        </p>
+      )}
+    </Card>
+  );
+}
 
 function exportComparisonMarkdown(sims: SimDetail[]) {
   const date = new Date().toISOString().split("T")[0];
@@ -42,7 +110,7 @@ function exportComparisonMarkdown(sims: SimDetail[]) {
   md += `| --- | ${sims.map(() => "---").join(" | ")} |\n`;
   md += `| Run | ${sims.map(s => runLabel(s) || s.id.substring(0, 8)).join(" | ")} |\n`;
   md += `| Name | ${sims.map(s => simTitle(s)).join(" | ")} |\n`;
-  md += `| Status | ${sims.map(s => s.status).join(" | ")} |\n`;
+  md += `| Vs reference | ${sims.map(s => `${growthStateLabel(s.status)}${percentOfReference(s.growth_rate) != null ? ` (${percentOfReference(s.growth_rate)}%)` : ""}`).join(" | ")} |\n`;
   md += `| Condition | ${sims.map(s => `${s.temperature}°C · ${s.oxygen_level} · ${s.carbon_source}`).join(" | ")} |\n`;
   md += `| Growth Rate | ${sims.map(s => s.growth_rate?.toFixed(4) || "N/A").join(" | ")} |\n`;
   md += `| Doubling Time | ${sims.map(s => s.doubling_time?.toFixed(2) || "N/A").join(" | ")} |\n`;
@@ -139,12 +207,31 @@ function CompareContent() {
 
   if (sims.length === 0) return null;
 
-  // Chart Data
-  const chartData = [
-    { name: "Growth Rate", ...sims.reduce((acc, sim, i) => ({ ...acc, [SIM_LABELS[i]]: sim.growth_rate }), {}) },
-    { name: "Doubling Time", ...sims.reduce((acc, sim, i) => ({ ...acc, [SIM_LABELS[i]]: sim.doubling_time }), {}) },
-    { name: "Viability %", ...sims.reduce((acc, sim, i) => ({ ...acc, [SIM_LABELS[i]]: sim.viability_score ? sim.viability_score * 100 : 0 }), {}) }
-  ];
+  // One row per run, reused by the three small charts
+  const rowBase = sims.map((sim, i) => ({
+    key: sim.id,
+    label: `Sim ${SIM_LABELS[i]}${sim.run_number != null ? ` · ${runLabel(sim)}` : ""}`,
+    title: simTitle(sim),
+    color: SIM_COLORS[i],
+  }));
+  const growthRows: BarRow[] = sims.map((sim, i) => ({
+    ...rowBase[i],
+    value: sim.growth_rate,
+    display: formatGrowth(sim.growth_rate),
+  }));
+  const doublingRows: BarRow[] = sims.map((sim, i) => ({
+    ...rowBase[i],
+    value: sim.doubling_time,
+    display: sim.doubling_time != null ? `${sim.doubling_time.toFixed(2)} h` : "no growth",
+  }));
+  const viabilityRows: BarRow[] = sims.map((sim, i) => ({
+    ...rowBase[i],
+    value: sim.viability_score != null ? sim.viability_score * 100 : null,
+    display: sim.viability_score != null ? `${(sim.viability_score * 100).toFixed(0)}%` : "—",
+  }));
+  // Scales: start at 0, leave a little room past the biggest bar (and the reference line)
+  const growthMax = Math.max(REFERENCE_GROWTH_RATE, ...sims.map((s) => s.growth_rate ?? 0)) * 1.1;
+  const doublingMax = Math.max(1, ...sims.map((s) => s.doubling_time ?? 0)) * 1.1;
 
   return (
     <div className="p-8 max-w-6xl mx-auto text-[#eaffff] page-enter space-y-8">
@@ -167,10 +254,11 @@ function CompareContent() {
           <Card key={sim.id} className="p-4 bg-[#01070c] border-[#5c8494]/30 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: SIM_COLORS[i] }}></div>
             <div className="flex justify-between items-start mb-2">
-              <span className="font-semibold" style={{ color: SIM_COLORS[i] }}>
+              <span className="flex items-center gap-1.5 font-semibold text-[#eaffff]">
+                <Swatch color={SIM_COLORS[i]} />
                 Sim {SIM_LABELS[i]}{sim.run_number != null && <span className="font-mono-readout font-normal text-[#5c8494]"> · {runLabel(sim)}</span>}
               </span>
-              <StatusBadge status={sim.status} />
+              <StatusBadge status={sim.status} growthRate={sim.growth_rate} />
             </div>
             <div className="text-sm text-[#eaffff] mb-1">{simTitle(sim)}</div>
             {sim.name && <div className="text-xs text-[#5c8494] mb-3">{conditionLine(sim)}</div>}
@@ -181,25 +269,21 @@ function CompareContent() {
         ))}
       </div>
 
-      {/* Bar Chart */}
-      <Card className="p-6 bg-[#01070c] border-[#5c8494]/30 h-80">
-        <h2 className="text-lg font-semibold mb-6">Metrics Comparison</h2>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#5c8494" opacity={0.3} />
-            <XAxis dataKey="name" stroke="#8cc3d4" fontSize={12} tickLine={false} axisLine={false} />
-            <YAxis stroke="#8cc3d4" fontSize={12} tickLine={false} axisLine={false} />
-            <Tooltip 
-              contentStyle={{ backgroundColor: "#01070c", borderColor: "#5c8494", color: "#eaffff" }}
-              itemStyle={{ color: "#eaffff" }}
-            />
-            <Legend wrapperStyle={{ paddingTop: "20px" }} />
-            {sims.map((_, i) => (
-              <Bar key={SIM_LABELS[i]} dataKey={SIM_LABELS[i]} fill={SIM_COLORS[i]} radius={[4, 4, 0, 0]} maxBarSize={50} />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </Card>
+      {/* Metrics: one small chart per measure, each on its own scale */}
+      <div>
+        <h2 className="text-lg font-semibold mb-4">Metrics Comparison</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <MetricBars
+            title="Growth rate"
+            subtitle={`${GROWTH_UNIT} · higher is faster`}
+            rows={growthRows}
+            max={growthMax}
+            reference={{ value: REFERENCE_GROWTH_RATE, label: `Reference ${REFERENCE_GROWTH_RATE} ${GROWTH_UNIT} (${REFERENCE_CONDITION})` }}
+          />
+          <MetricBars title="Doubling time" subtitle="hours · lower is faster" rows={doublingRows} max={doublingMax} />
+          <MetricBars title="Viability" subtitle="% of cells surviving" rows={viabilityRows} max={100} />
+        </div>
+      </div>
 
       {/* Flux Maps */}
       <div>
@@ -207,8 +291,10 @@ function CompareContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {sims.map((sim, i) => (
             <div key={sim.id} className="p-4 bg-white/[0.04] border border-white/[0.07] rounded-2xl" style={{ borderTopWidth: 4, borderTopColor: SIM_COLORS[i] }}>
-              <div className="mb-4">
-                <span className="font-semibold" style={{ color: SIM_COLORS[i] }}>Sim {SIM_LABELS[i]}{sim.run_number != null ? ` · ${runLabel(sim)}` : ""}</span>
+              <div className="mb-4 flex items-center gap-1.5">
+                <Swatch color={SIM_COLORS[i]} />
+                <span className="font-semibold text-[#eaffff]">Sim {SIM_LABELS[i]}{sim.run_number != null ? ` · ${runLabel(sim)}` : ""}</span>
+                <span className="text-xs text-[#5c8494] truncate">{simTitle(sim)}</span>
               </div>
               <FluxMap
                 carbonSource={sim.carbon_source}
@@ -235,7 +321,7 @@ function CompareContent() {
           return (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <h3 className="mb-3 font-semibold pb-2 border-b border-[#3ef2ff]/30" style={{ color: SIM_COLORS[0] }}>Only in Sim A</h3>
+                <h3 className="mb-3 font-semibold pb-2 border-b border-white/10 text-[#eaffff] flex items-center gap-1.5"><Swatch color={SIM_COLORS[0]} /> Only in Sim A</h3>
                 {only1.length > 0 ? (
                   <ul className="space-y-1 text-sm text-[#8cc3d4]">
                     {only1.map(p => <li key={p}>&bull; {p}</li>)}
@@ -243,7 +329,7 @@ function CompareContent() {
                 ) : <div className="text-sm text-[#5c8494]">None</div>}
               </div>
               <div>
-                <h3 className="mb-3 font-semibold pb-2 border-b border-[#b98bff]/30" style={{ color: SIM_COLORS[1] }}>Only in Sim B</h3>
+                <h3 className="mb-3 font-semibold pb-2 border-b border-white/10 text-[#eaffff] flex items-center gap-1.5"><Swatch color={SIM_COLORS[1]} /> Only in Sim B</h3>
                 {only2.length > 0 ? (
                   <ul className="space-y-1 text-sm text-[#8cc3d4]">
                     {only2.map(p => <li key={p}>&bull; {p}</li>)}

@@ -10,7 +10,7 @@ import { Card, MetricCard } from "@/components/ui/card";
 import { LaunchSequence, ErrorBanner } from "@/components/ui/loading";
 import { EnvParams, PRESETS, DEFAULT_PARAMS, shallowEqual } from "@/lib/presets";
 import { Timer, HeartPulse, Zap, FlaskConical, LoaderCircle, Play } from "lucide-react";
-import { GROWTH_UNIT } from "@/lib/sim-format";
+import { GROWTH_UNIT, growthStateLabel, percentOfReference, REFERENCE_GROWTH_RATE } from "@/lib/sim-format";
 
 const API = "http://localhost:8000/api/v1";
 
@@ -166,7 +166,6 @@ function SimulateContent() {
   // B1: growth_state is computed server-side against the reference growth
   // rate. This fallback mirrors the same thresholds. Keep REFERENCE_GROWTH_RATE
   // in sync with backend/app/services/simulation_runner.py.
-  const REFERENCE_GROWTH_RATE = 0.802;
   const statusLabel = result?.growth_state
     ?? (result == null || result.growth_rate == null || result.growth_rate < 0.01 ? "not-viable"
       : result.growth_rate >= REFERENCE_GROWTH_RATE * 0.9 ? "optimal"
@@ -266,7 +265,7 @@ function SimulateContent() {
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                       <div className={`h-2 w-2 rounded-full ${result.growth_rate != null && result.growth_rate > 0.5 ? 'bg-[#3ef2ff] shadow-[0_0_8px_rgba(62,242,255,0.6)]' : 'bg-[#ffcf66]'}`} />
-                      <span className="text-sm text-[#8cc3d4]">{statusLabel}</span>
+                      <span className="text-sm text-[#8cc3d4]">{growthStateLabel(statusLabel)}{percentOfReference(result.growth_rate) != null && ` · ${percentOfReference(result.growth_rate)}% of reference`}</span>
                     </div>
                   </div>
                   {/* Run metadata — moved here from page footer */}

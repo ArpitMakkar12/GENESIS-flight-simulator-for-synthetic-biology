@@ -8,7 +8,7 @@ import { exportSimulationMarkdown } from "@/components/export-markdown";
 import { FluxMap } from "@/components/flux-map";
 import { ProcessTrace } from "@/components/process-trace";
 import { Pencil, Check, X } from "lucide-react";
-import { runLabel, simTitle, autoTitle, fullTitle, conditionLine, formatDateTime, formatGrowth, GROWTH_UNIT } from "@/lib/sim-format";
+import { runLabel, simTitle, autoTitle, fullTitle, conditionLine, formatDateTime, formatGrowth, GROWTH_UNIT, percentOfReference, REFERENCE_CONDITION } from "@/lib/sim-format";
 
 const API = "http://localhost:8000/api/v1";
 
@@ -293,8 +293,13 @@ export default function SimulationDetailPage() {
           <div className="text-xs text-[#5c8494] mt-1 uppercase tracking-wider">Viability</div>
         </div>
         <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl backdrop-blur-md p-4 flex flex-col items-center justify-center">
-          <StatusBadge status={growthState} />
-          <div className="text-xs text-[#5c8494] mt-2 uppercase tracking-wider">Growth State</div>
+          <StatusBadge status={growthState} growthRate={sim.growth_rate} />
+          {percentOfReference(sim.growth_rate) != null && (
+            <div className="text-xs text-[#8cc3d4] mt-1.5 font-mono-readout" title={`Reference: ${REFERENCE_CONDITION}`}>
+              {percentOfReference(sim.growth_rate)}% of reference
+            </div>
+          )}
+          <div className="text-xs text-[#5c8494] mt-1 uppercase tracking-wider">Vs Reference</div>
         </div>
       </div>
 
