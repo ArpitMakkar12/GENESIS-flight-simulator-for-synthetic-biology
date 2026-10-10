@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, func
+from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, Sequence, func, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -12,6 +12,21 @@ class Simulation(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     construct_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("constructs.id"), nullable=True, index=True)
+
+    # Human-friendly identity
+    # run_number: #1, #2, #3 ... handed out by Postgres in creation order and
+    # never reused, so "Run #12" always means the same simulation.
+    # name: optional label the user types (e.g. "Heat shock test"). When empty,
+    # the UI builds a title from the conditions instead.
+    run_number: Mapped[int] = mapped_column(
+        Integer,
+        Sequence("simulations_run_number_seq"),
+        server_default=text("nextval('simulations_run_number_seq')"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    name: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
     # Environmental parameters
     temperature: Mapped[float] = mapped_column(Float, default=37.0)
@@ -46,4 +61,4 @@ class Simulation(Base):
     construct: Mapped["Construct"] = relationship(back_populates="simulations")
 
     def __repr__(self) -> str:
-        return f"<Simulation {self.id} status={self.status}>"
+        return f"<Simulation #{self.run_number} {self.id} status={self.status}>"

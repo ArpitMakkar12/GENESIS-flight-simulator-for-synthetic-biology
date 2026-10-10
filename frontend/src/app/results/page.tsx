@@ -1,54 +1,98 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, StatusBadge } from "@/components/ui/card";
 import { EmptyState, ErrorBanner } from "@/components/ui/loading";
-import { ChartColumn, Trash2 } from "lucide-react";
+import { ChartColumn, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { runLabel, simTitle, conditionLine, formatDateTime, formatGrowth } from "@/lib/sim-format";
 
 const API = "http://localhost:8000/api/v1";
+const PAGE_SIZE = 25;
 
 interface SimSummary {
-  id: string; status: string; temperature: number; ph: number;
+  id: string; run_number: number | null; name: string | null; status: string;
+  temperature: number; ph: number;
   oxygen_level: string; carbon_source: string; nitrogen_source: string;
   growth_rate: number | null; doubling_time: number | null;
   viability_score: number | null; compute_time_ms: number | null;
   created_at: string | null; completed_at: string | null;
 }
 
-type SortKey = "created_at" | "growth_rate" | "viability_score";
+interface ListResponse { items: SimSummary[]; total: number; limit: number; offset: number }
+
+type SortKey = "run_number" | "created_at" | "growth_rate" | "viability_score";
 
 export default function ResultsPage() {
   const router = useRouter();
   const [sims, setSims] = useState<SimSummary[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0); // 0 = first page
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("created_at");
+  const [sortKey, setSortKey] = useState<SortKey>("run_number");
   const [sortAsc, setSortAsc] = useState(false);
   const [filterOxygen, setFilterOxygen] = useState<string>("");
   const [filterCarbon, setFilterCarbon] = useState<string>("");
+  const [oxygenOptions, setOxygenOptions] = useState<string[]>([]);
+  const [carbonOptions, setCarbonOptions] = useState<string[]>([]);
+  const [reloadKey, setReloadKey] = useState(0); // bump to re-fetch the current page
   // Ids waiting for confirmation: one row (trash icon) or every selected row.
   const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { fetchList(); }, []);
+  // Filter dropdowns list every value ever used, not just the ones on this page
+  useEffect(() => {
+    fetch(`${API}/results/filters`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setOxygenOptions(d.oxygen_levels ?? []);
+        setCarbonOptions(d.carbon_sources ?? []);
+      })
+      .catch(() => {});
+  }, [reloadKey]);
 
-  const fetchList = async () => {
+  // The server does the filtering, sorting and paging, so they cover every simulation
+  useEffect(() => {
+    const controller = new AbortController();
+    const params = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String(page * PAGE_SIZE),
+      sort: sortKey,
+      order: sortAsc ? "asc" : "desc",
+    });
+    if (filterOxygen) params.set("oxygen", filterOxygen);
+    if (filterCarbon) params.set("carbon", filterCarbon);
+
     setLoading(true);
-    try {
-      const res = await fetch(`${API}/results?limit=50`);
-      if (!res.ok) throw new Error("Failed to fetch");
-      setSims(await res.json());
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-    } finally { setLoading(false); }
-  };
+    fetch(`${API}/results?${params}`, { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch");
+        const data = (await res.json()) as ListResponse;
+        // A delete can empty the last page: step back one page instead of showing nothing
+        if (data.items.length === 0 && page > 0 && data.total > 0) {
+          setPage(Math.max(0, Math.ceil(data.total / PAGE_SIZE) - 1));
+          return;
+        }
+        setSims(data.items);
+        setTotal(data.total);
+        setError(null);
+        setLoading(false);
+      })
+      .catch((e: unknown) => {
+        if (controller.signal.aborted) return; // a newer request replaced this one
+        setError(e instanceof Error ? e.message : "Unknown error");
+        setLoading(false);
+      });
+    return () => controller.abort();
+  }, [page, sortKey, sortAsc, filterOxygen, filterCarbon, reloadKey]);
 
-  // One request for any number of rows. Only rows the server confirms as
-  // deleted leave the table, so a failure never hides a row that still exists.
+  // One request for any number of rows. Afterwards the page is re-fetched,
+  // so rows from the next page slide up to fill the gap.
   const deleteSims = async (ids: string[]) => {
     setDeleting(true);
     setDeleteError(null);
@@ -61,9 +105,9 @@ export default function ResultsPage() {
       if (!res.ok) throw new Error(`Delete failed (${res.status})`);
       const { deleted } = (await res.json()) as { deleted: string[] };
       const gone = new Set(deleted);
-      setSims((prev) => prev.filter((s) => !gone.has(s.id)));
       setSelectedIds((prev) => new Set(Array.from(prev).filter((id) => !gone.has(id))));
       setDeleteConfirm(null);
+      setReloadKey((k) => k + 1);
     } catch (e: unknown) {
       setDeleteError(e instanceof Error ? e.message : "Delete failed");
     } finally {
@@ -74,6 +118,7 @@ export default function ResultsPage() {
   const closeConfirm = () => { if (!deleting) { setDeleteConfirm(null); setDeleteError(null); } };
 
   // No cap on selection: compare needs 2-4, delete takes any number.
+  // Selection is kept while you move between pages.
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -85,27 +130,13 @@ export default function ResultsPage() {
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(!sortAsc);
     else { setSortKey(key); setSortAsc(false); }
+    setPage(0);
   };
   const sortIcon = (key: SortKey) => sortKey === key ? (sortAsc ? " ↑" : " ↓") : "";
 
-  const oxygenOptions = useMemo(() => Array.from(new Set(sims.map((s) => s.oxygen_level))), [sims]);
-  const carbonOptions = useMemo(() => Array.from(new Set(sims.map((s) => s.carbon_source))), [sims]);
-
-  const filtered = useMemo(() => {
-    let list = [...sims];
-    if (filterOxygen) list = list.filter((s) => s.oxygen_level === filterOxygen);
-    if (filterCarbon) list = list.filter((s) => s.carbon_source === filterCarbon);
-    list.sort((a, b) => {
-      const av = a[sortKey] ?? 0, bv = b[sortKey] ?? 0;
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-      return sortAsc ? cmp : -cmp;
-    });
-    return list;
-  }, [sims, filterOxygen, filterCarbon, sortKey, sortAsc]);
-
-  // Header checkbox acts on the rows currently shown (respects the filters).
-  const allVisibleSelected = filtered.length > 0 && filtered.every((s) => selectedIds.has(s.id));
-  const someVisibleSelected = filtered.some((s) => selectedIds.has(s.id));
+  // Header checkbox acts on the rows on this page.
+  const allVisibleSelected = sims.length > 0 && sims.every((s) => selectedIds.has(s.id));
+  const someVisibleSelected = sims.some((s) => selectedIds.has(s.id));
   useEffect(() => {
     if (selectAllRef.current) selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
   }, [someVisibleSelected, allVisibleSelected]);
@@ -113,101 +144,137 @@ export default function ResultsPage() {
   const toggleSelectAllVisible = () => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (allVisibleSelected) filtered.forEach((s) => next.delete(s.id));
-      else filtered.forEach((s) => next.add(s.id));
+      if (allVisibleSelected) sims.forEach((s) => next.delete(s.id));
+      else sims.forEach((s) => next.add(s.id));
       return next;
     });
   };
 
   const canCompare = selectedIds.size >= 2 && selectedIds.size <= 4;
+  const filtering = !!(filterOxygen || filterCarbon);
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const firstRow = total === 0 ? 0 : page * PAGE_SIZE + 1;
+  const lastRow = Math.min(total, (page + 1) * PAGE_SIZE);
 
-  const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
+  const thSort = "text-left p-3 cursor-pointer hover:text-[#7dffef] select-none font-medium uppercase tracking-wider transition-colors";
+  const selectCls = "px-3 py-1.5 rounded-xl bg-[#01070c]/60 border border-white/10 text-[#eaffff] text-sm focus:border-[#3ef2ff]/60 focus:outline-none";
+  const pageBtn = "inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-xl bg-white/[0.05] text-[#8cc3d4] border border-white/10 hover:bg-white/[0.08] transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
 
   if (error) return <div className="max-w-5xl page-enter"><ErrorBanner message={error} /></div>;
 
   return (
-    <div className="max-w-5xl page-enter">
+    <div className="max-w-5xl page-enter pb-20">
       <div className="flex items-baseline justify-between mb-1">
         <h1 className="text-3xl font-semibold text-[#eaffff] glow-text">Simulation Results</h1>
-        <span className="text-sm text-[#5c8494]">{sims.length} simulations recorded</span>
+        <span className="text-sm text-[#5c8494]">
+          {total} {filtering ? "matching" : total === 1 ? "simulation" : "simulations"}
+        </span>
       </div>
       <p className="text-sm text-[#8cc3d4] mb-6">Click a row to view full detail · Select 2–4 to compare, or any number to delete</p>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
-        <select value={filterOxygen} onChange={(e) => setFilterOxygen(e.target.value)}
-          className="px-3 py-1.5 rounded-xl bg-[#01070c]/60 border border-white/10 text-[#eaffff] text-sm focus:border-[#3ef2ff]/60 focus:outline-none">
+        <select value={filterOxygen} onChange={(e) => { setFilterOxygen(e.target.value); setPage(0); }} className={selectCls} aria-label="Filter by oxygen">
           <option value="">All Oxygen</option>
           {oxygenOptions.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
-        <select value={filterCarbon} onChange={(e) => setFilterCarbon(e.target.value)}
-          className="px-3 py-1.5 rounded-xl bg-[#01070c]/60 border border-white/10 text-[#eaffff] text-sm focus:border-[#3ef2ff]/60 focus:outline-none">
+        <select value={filterCarbon} onChange={(e) => { setFilterCarbon(e.target.value); setPage(0); }} className={selectCls} aria-label="Filter by carbon source">
           <option value="">All Carbon</option>
           {carbonOptions.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
+        {filtering && (
+          <button onClick={() => { setFilterOxygen(""); setFilterCarbon(""); setPage(0); }}
+            className="px-3 py-1.5 text-xs text-[#8cc3d4] hover:text-[#eaffff] transition-colors">Clear filters</button>
+        )}
       </div>
 
-      {/* Table - FULL WIDTH, no side rail */}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10 text-[#8cc3d4] text-xs">
                 <th className="p-3 w-10">
-                  <input ref={selectAllRef} type="checkbox" aria-label="Select all shown simulations"
+                  <input ref={selectAllRef} type="checkbox" aria-label="Select all simulations on this page"
                     checked={allVisibleSelected} onChange={toggleSelectAllVisible}
-                    disabled={loading || filtered.length === 0}
+                    disabled={loading || sims.length === 0}
                     className="accent-[#3ef2ff] cursor-pointer disabled:cursor-default" />
                 </th>
-                <th className="text-left p-3 cursor-pointer hover:text-[#7dffef] select-none font-medium uppercase tracking-wider transition-colors" onClick={() => toggleSort("created_at")}>Date{sortIcon("created_at")}</th>
-                <th className="text-left p-3 font-medium uppercase tracking-wider">Conditions</th>
-                <th className="text-left p-3 cursor-pointer hover:text-[#7dffef] select-none font-medium uppercase tracking-wider transition-colors" onClick={() => toggleSort("growth_rate")}>Growth{sortIcon("growth_rate")}</th>
-                <th className="text-left p-3 cursor-pointer hover:text-[#7dffef] select-none font-medium uppercase tracking-wider transition-colors" onClick={() => toggleSort("viability_score")}>Viability{sortIcon("viability_score")}</th>
+                <th className={`${thSort} w-16`} onClick={() => toggleSort("run_number")}>#{sortIcon("run_number")}</th>
+                <th className="text-left p-3 font-medium uppercase tracking-wider">Simulation</th>
+                <th className={thSort} onClick={() => toggleSort("created_at")}>Date{sortIcon("created_at")}</th>
+                <th className={thSort} onClick={() => toggleSort("growth_rate")}>Growth{sortIcon("growth_rate")}</th>
+                <th className={thSort} onClick={() => toggleSort("viability_score")}>Viability{sortIcon("viability_score")}</th>
                 <th className="text-left p-3 font-medium uppercase tracking-wider">Status</th>
                 <th className="p-3 w-10"></th>
               </tr>
             </thead>
             <tbody>
-              {loading && [1,2,3].map((i) => (
+              {loading && sims.length === 0 && [1, 2, 3].map((i) => (
                 <tr key={i} className="border-b border-white/[0.06] animate-pulse">
-                  {Array.from({ length: 7 }).map((_, j) => <td key={j} className="p-3"><div className="h-4 bg-white/[0.06] rounded w-3/4" /></td>)}
+                  {Array.from({ length: 8 }).map((_, j) => <td key={j} className="p-3"><div className="h-4 bg-white/[0.06] rounded w-3/4" /></td>)}
                 </tr>
               ))}
-              {!loading && filtered.length === 0 && (
-                <tr><td colSpan={7}>
-                  <EmptyState icon={ChartColumn} title="No simulations found" description="Run your first simulation to see results here." actionLabel="Go to Simulate" actionHref="/simulate" />
+              {!loading && sims.length === 0 && (
+                <tr><td colSpan={8}>
+                  {filtering ? (
+                    <p className="p-8 text-center text-sm text-[#8cc3d4]">No simulations match these filters.</p>
+                  ) : (
+                    <EmptyState icon={ChartColumn} title="No simulations yet" description="Run your first simulation to see results here." actionLabel="Go to Simulate" actionHref="/simulate" />
+                  )}
                 </td></tr>
               )}
-              {filtered.map((sim) => (
+              {sims.map((sim) => (
                 <tr key={sim.id}
                   onClick={() => router.push(`/results/${sim.id}`)}
-                  className={`border-b border-white/[0.06] cursor-pointer transition-colors hover:bg-white/[0.04] ${selectedIds.has(sim.id) ? "bg-[#3ef2ff]/[0.05]" : ""}`}>
+                  className={`border-b border-white/[0.06] cursor-pointer transition-colors hover:bg-white/[0.04] ${selectedIds.has(sim.id) ? "bg-[#3ef2ff]/[0.05]" : ""} ${loading ? "opacity-60" : ""}`}>
                   <td className="p-3" onClick={(e) => { e.stopPropagation(); toggleSelect(sim.id); }}>
-                    <input type="checkbox" checked={selectedIds.has(sim.id)}
-                      readOnly
+                    <input type="checkbox" checked={selectedIds.has(sim.id)} readOnly
+                      aria-label={`Select ${runLabel(sim)}`}
                       className="accent-[#3ef2ff] cursor-pointer pointer-events-none" />
                   </td>
-                  <td className="p-3 text-[#8cc3d4] text-xs">{fmt(sim.created_at)}</td>
-                  <td className="p-3 text-xs text-[#8cc3d4]">{sim.temperature}°C · pH {sim.ph} · {sim.oxygen_level} · {sim.carbon_source}</td>
-                  <td className="p-3 font-mono-readout text-[#eaffff]">{sim.growth_rate != null ? `${sim.growth_rate} hr⁻¹` : "—"}</td>
+                  <td className="p-3 font-mono-readout text-[#5c8494]">{runLabel(sim)}</td>
+                  <td className="p-3">
+                    <div className="text-[#eaffff]">{simTitle(sim)}</div>
+                    {sim.name && <div className="text-xs text-[#5c8494] mt-0.5">{conditionLine(sim)}</div>}
+                  </td>
+                  <td className="p-3 text-[#8cc3d4] text-xs whitespace-nowrap">{formatDateTime(sim.created_at)}</td>
+                  <td className="p-3 font-mono-readout text-[#eaffff] whitespace-nowrap">{formatGrowth(sim.growth_rate)}</td>
                   <td className="p-3">{sim.viability_score != null ? (
                     <span className={sim.viability_score > 0.5 ? "text-[#7dffef]" : "text-[#ff8b6e]"}>{(sim.viability_score * 100).toFixed(0)}%</span>
                   ) : "—"}</td>
                   <td className="p-3"><StatusBadge status={sim.status} /></td>
                   <td className="p-3 text-center" onClick={(e) => { e.stopPropagation(); setDeleteConfirm([sim.id]); }}>
-                    <button className="text-[#5c8494] hover:text-[#ff5a36] transition-colors text-sm p-1" title="Delete"><Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" /></button>
+                    <button className="text-[#5c8494] hover:text-[#ff5a36] transition-colors text-sm p-1" title="Delete" aria-label={`Delete ${runLabel(sim)}`}>
+                      <Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {total > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-white/[0.06] text-xs text-[#8cc3d4]">
+            <span>Showing {firstRow}–{lastRow} of {total}</span>
+            <div className="flex items-center gap-2">
+              <button className={pageBtn} disabled={page === 0 || loading} onClick={() => setPage((p) => p - 1)}>
+                <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" /> Prev
+              </button>
+              <span className="px-1 text-[#5c8494]">Page {page + 1} of {pageCount}</span>
+              <button className={pageBtn} disabled={page + 1 >= pageCount || loading} onClick={() => setPage((p) => p + 1)}>
+                Next <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Delete confirmation modal: one row or many */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={closeConfirm}>
-          <div className="p-6 max-w-sm mx-4 bg-white/[0.04] border border-white/[0.07] rounded-2xl backdrop-blur-md" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+          <div className="p-6 max-w-sm mx-4 bg-[#031722] border border-white/[0.07] rounded-2xl" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold text-[#d9f7ff] mb-2">
               {deleteConfirm.length === 1 ? "Delete Simulation?" : `Delete ${deleteConfirm.length} Simulations?`}
             </h3>

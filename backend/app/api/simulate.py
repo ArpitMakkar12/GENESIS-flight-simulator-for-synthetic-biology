@@ -76,6 +76,7 @@ async def run_simulation(
     }
     sim = Simulation(
         id=sim_id,
+        name=(request.name or "").strip() or None,
         construct_id=request.construct_id,
         temperature=request.temperature,
         ph=request.ph,
@@ -108,9 +109,12 @@ async def run_simulation(
     )
     db.add(sim)
     await db.commit()
+    await db.refresh(sim)  # load the run_number Postgres just assigned
 
     return SimulationResponse(
         task_id=sim_id,
+        run_number=sim.run_number,
+        name=sim.name,
         solver_status=result.get("solver_status"),
         growth_state=result.get("growth_state"),
         status=result.get("solver_status"),

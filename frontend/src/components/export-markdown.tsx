@@ -1,3 +1,5 @@
+import { fullTitle, runLabel, simTitle, formatDateTime, formatGrowth } from "@/lib/sim-format";
+
 /**
  * Export a simulation result as Notion-compatible Markdown.
  * Downloads as .md file via browser Blob API — no server needed.
@@ -5,6 +7,8 @@
 
 interface ExportableSim {
   id: string;
+  run_number?: number | null;
+  name?: string | null;
   status: string;
   temperature: number;
   ph: number;
@@ -22,12 +26,10 @@ interface ExportableSim {
 }
 
 export function exportSimulationMarkdown(sim: ExportableSim) {
-  const date = sim.created_at
-    ? new Date(sim.created_at).toLocaleString()
-    : new Date().toLocaleString();
+  const date = formatDateTime(sim.created_at ?? new Date().toISOString());
 
   const lines: string[] = [
-    `# GENESIS Simulation Report`,
+    `# GENESIS Simulation Report — ${fullTitle(sim)}`,
     ``,
     `**Date:** ${date}`,
     `**Status:** ${sim.status}`,
@@ -52,8 +54,8 @@ export function exportSimulationMarkdown(sim: ExportableSim) {
     ``,
     `| Metric | Value |`,
     `|--------|-------|`,
-    `| Growth Rate | ${sim.growth_rate ?? "N/A"} hr⁻¹ |`,
-    `| Doubling Time | ${sim.doubling_time ?? "N/A"} hr |`,
+    `| Growth Rate | ${formatGrowth(sim.growth_rate)} |`,
+    `| Doubling Time | ${sim.doubling_time != null ? `${sim.doubling_time.toFixed(2)} h` : "N/A"} |`,
     `| Viability | ${sim.viability_score != null ? `${(sim.viability_score * 100).toFixed(0)}%` : "N/A"} |`,
     ``,
   ];
@@ -94,7 +96,8 @@ export function exportSimulationMarkdown(sim: ExportableSim) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `genesis-simulation-${sim.id.slice(0, 8)}.md`;
+  // e.g. genesis-run-12.md (falls back to the id for rows without a number)
+  a.download = sim.run_number != null ? `genesis-run-${sim.run_number}.md` : `genesis-simulation-${sim.id.slice(0, 8)}.md`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -106,8 +109,9 @@ export function exportSimulationMarkdown(sim: ExportableSim) {
  * Export a comparison of multiple simulations as Notion-compatible Markdown.
  */
 export function exportComparisonMarkdown(sims: ExportableSim[]) {
-  const labels = ["A", "B", "C", "D"];
-  const date = new Date().toLocaleString();
+  // Column headings use the run number when there is one: "#12", "#15", ...
+  const labels = sims.map((s, i) => runLabel(s) || `Sim ${["A", "B", "C", "D"][i]}`);
+  const date = formatDateTime(new Date().toISOString());
 
   const lines: string[] = [
     `# GENESIS Comparison Report`,
@@ -115,11 +119,13 @@ export function exportComparisonMarkdown(sims: ExportableSim[]) {
     `**Date:** ${date}`,
     `**Simulations compared:** ${sims.length}`,
     ``,
+    ...sims.map((s, i) => `- **${labels[i]}:** ${simTitle(s)}`),
+    ``,
     `---`,
     ``,
     `## Conditions`,
     ``,
-    `| | ${sims.map((_, i) => `Sim ${labels[i]}`).join(" | ")} |`,
+    `| | ${labels.join(" | ")} |`,
     `|---|${sims.map(() => "---").join("|")}|`,
     `| Temperature | ${sims.map((s) => `${s.temperature}°C`).join(" | ")} |`,
     `| pH | ${sims.map((s) => `${s.ph}`).join(" | ")} |`,
@@ -131,10 +137,10 @@ export function exportComparisonMarkdown(sims: ExportableSim[]) {
     ``,
     `## Results`,
     ``,
-    `| Metric | ${sims.map((_, i) => `Sim ${labels[i]}`).join(" | ")} |`,
+    `| Metric | ${labels.join(" | ")} |`,
     `|--------|${sims.map(() => "---").join("|")}|`,
-    `| Growth Rate | ${sims.map((s) => s.growth_rate != null ? `${s.growth_rate} hr⁻¹` : "N/A").join(" | ")} |`,
-    `| Doubling Time | ${sims.map((s) => s.doubling_time != null ? `${s.doubling_time} hr` : "N/A").join(" | ")} |`,
+    `| Growth Rate | ${sims.map((s) => formatGrowth(s.growth_rate)).join(" | ")} |`,
+    `| Doubling Time | ${sims.map((s) => s.doubling_time != null ? `${s.doubling_time.toFixed(2)} h` : "N/A").join(" | ")} |`,
     `| Viability | ${sims.map((s) => s.viability_score != null ? `${(s.viability_score * 100).toFixed(0)}%` : "N/A").join(" | ")} |`,
     `| Status | ${sims.map((s) => s.status).join(" | ")} |`,
     ``,
@@ -149,9 +155,9 @@ export function exportComparisonMarkdown(sims: ExportableSim[]) {
       const onlyA = Array.from(sets[0]).filter((p) => !sets[i].has(p));
       const onlyB = Array.from(sets[i]).filter((p) => !sets[0].has(p));
       const shared = Array.from(sets[0]).filter((p) => sets[i].has(p));
-      lines.push(`### Sim A vs Sim ${labels[i]}`, ``);
-      if (onlyA.length > 0) lines.push(`- **Only Sim A:** ${onlyA.join(", ")}`);
-      if (onlyB.length > 0) lines.push(`- **Only Sim ${labels[i]}:** ${onlyB.join(", ")}`);
+      lines.push(`### ${labels[0]} vs ${labels[i]}`, ``);
+      if (onlyA.length > 0) lines.push(`- **Only ${labels[0]}:** ${onlyA.join(", ")}`);
+      if (onlyB.length > 0) lines.push(`- **Only ${labels[i]}:** ${onlyB.join(", ")}`);
       if (shared.length > 0) lines.push(`- **Shared (${shared.length}):** ${shared.join(", ")}`);
       lines.push(``);
     });

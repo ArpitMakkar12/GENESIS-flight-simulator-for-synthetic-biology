@@ -6,10 +6,13 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Card, StatusBadge } from "@/components/ui/card";
 import { Spinner, ErrorBanner } from "@/components/ui/loading";
 import { FluxMap } from "@/components/flux-map";
+import { runLabel, simTitle, conditionLine, formatGrowth, GROWTH_UNIT } from "@/lib/sim-format";
 import Link from "next/link";
 
 interface SimDetail {
   id: string;
+  run_number?: number | null;
+  name?: string | null;
   status: string;
   temperature: number;
   ph: number;
@@ -37,7 +40,8 @@ function exportComparisonMarkdown(sims: SimDetail[]) {
 
   md += `| Metric | ${sims.map((_, i) => `Sim ${SIM_LABELS[i]}`).join(" | ")} |\n`;
   md += `| --- | ${sims.map(() => "---").join(" | ")} |\n`;
-  md += `| ID | ${sims.map(s => s.id.substring(0, 8)).join(" | ")} |\n`;
+  md += `| Run | ${sims.map(s => runLabel(s) || s.id.substring(0, 8)).join(" | ")} |\n`;
+  md += `| Name | ${sims.map(s => simTitle(s)).join(" | ")} |\n`;
   md += `| Status | ${sims.map(s => s.status).join(" | ")} |\n`;
   md += `| Condition | ${sims.map(s => `${s.temperature}°C · ${s.oxygen_level} · ${s.carbon_source}`).join(" | ")} |\n`;
   md += `| Growth Rate | ${sims.map(s => s.growth_rate?.toFixed(4) || "N/A").join(" | ")} |\n`;
@@ -163,14 +167,15 @@ function CompareContent() {
           <Card key={sim.id} className="p-4 bg-[#01070c] border-[#5c8494]/30 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: SIM_COLORS[i] }}></div>
             <div className="flex justify-between items-start mb-2">
-              <span className="font-semibold" style={{ color: SIM_COLORS[i] }}>Sim {SIM_LABELS[i]}</span>
+              <span className="font-semibold" style={{ color: SIM_COLORS[i] }}>
+                Sim {SIM_LABELS[i]}{sim.run_number != null && <span className="font-mono-readout font-normal text-[#5c8494]"> · {runLabel(sim)}</span>}
+              </span>
               <StatusBadge status={sim.status} />
             </div>
-            <div className="text-sm text-[#8cc3d4] mb-4">
-              {sim.temperature}°C &middot; {sim.oxygen_level} &middot; {sim.carbon_source}
-            </div>
-            <div className="font-mono-readout text-2xl text-[#eaffff]">
-              {sim.growth_rate?.toFixed(4) || "N/A"} <span className="text-sm text-[#5c8494]">h⁻¹</span>
+            <div className="text-sm text-[#eaffff] mb-1">{simTitle(sim)}</div>
+            {sim.name && <div className="text-xs text-[#5c8494] mb-3">{conditionLine(sim)}</div>}
+            <div className={`font-mono-readout text-2xl text-[#eaffff] ${sim.name ? "" : "mt-3"}`}>
+              {formatGrowth(sim.growth_rate, false)} <span className="text-sm text-[#5c8494]">{GROWTH_UNIT}</span>
             </div>
           </Card>
         ))}
@@ -203,12 +208,12 @@ function CompareContent() {
           {sims.map((sim, i) => (
             <div key={sim.id} className="p-4 bg-white/[0.04] border border-white/[0.07] rounded-2xl" style={{ borderTopWidth: 4, borderTopColor: SIM_COLORS[i] }}>
               <div className="mb-4">
-                <span className="font-semibold" style={{ color: SIM_COLORS[i] }}>Sim {SIM_LABELS[i]} Map</span>
+                <span className="font-semibold" style={{ color: SIM_COLORS[i] }}>Sim {SIM_LABELS[i]}{sim.run_number != null ? ` · ${runLabel(sim)}` : ""}</span>
               </div>
               <FluxMap
                 carbonSource={sim.carbon_source}
                 growthRate={sim.growth_rate}
-                conditionLabel={`Sim ${SIM_LABELS[i]}: ${sim.temperature}°C · ${sim.oxygen_level} · ${sim.carbon_source}`}
+                conditionLabel={conditionLine(sim)}
                 activePathways={sim.fba_results?.active_pathways || []}
                 fluxDistribution={sim.flux_distribution}
               />

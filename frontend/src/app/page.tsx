@@ -6,6 +6,7 @@ import { Card, StatusBadge } from "@/components/ui/card";
 import MicroscopeHero from "@/components/microscope-hero";
 import { PRESETS, GENESIS_STATS, presetToSearchParams } from "@/lib/presets";
 import { Dna, FlaskConical, ChartColumn, Blocks, BookOpen } from "lucide-react";
+import { runLabel, simTitle, formatDateTime, formatGrowth } from "@/lib/sim-format";
 
 const API = "http://localhost:8000/api/v1";
 
@@ -13,6 +14,8 @@ const API = "http://localhost:8000/api/v1";
 
 interface RecentSim {
   id: string;
+  run_number: number | null;
+  name: string | null;
   status: string;
   temperature: number;
   ph: number;
@@ -55,7 +58,9 @@ export default function HomePage() {
       setRecentError(false);
       const res = await fetch(`${API}/results?limit=2`);
       if (res.ok) {
-        setRecentSims(await res.json());
+        const data = await res.json();
+        // The list endpoint returns { items, total }; older backends returned a bare array
+        setRecentSims(Array.isArray(data) ? data : data.items ?? []);
       } else {
         setRecentError(true);
       }
@@ -64,16 +69,6 @@ export default function HomePage() {
     } finally {
       setRecentLoading(false);
     }
-  };
-
-  const formatDate = (iso: string | null) => {
-    if (!iso) return "";
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   };
 
   return (
@@ -206,18 +201,17 @@ export default function HomePage() {
                         key={sim.id}
                         className="flex items-center justify-between text-xs"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <StatusBadge status={sim.status} />
-                          <span className="text-[#8cc3d4]">
-                            {sim.temperature}°C · pH {sim.ph} · {sim.oxygen_level} · {sim.carbon_source}
-                          </span>
+                          <span className="font-mono-readout text-[#5c8494]">{runLabel(sim)}</span>
+                          <span className="text-[#8cc3d4] truncate">{simTitle(sim)}</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="font-mono-readout text-[#eaffff]">
-                            {sim.growth_rate !== null ? `${sim.growth_rate} hr⁻¹` : "—"}
+                            {formatGrowth(sim.growth_rate)}
                           </span>
                           <span className="text-[#5c8494] hidden sm:inline">
-                            {formatDate(sim.created_at)}
+                            {formatDateTime(sim.created_at)}
                           </span>
                         </div>
                       </div>

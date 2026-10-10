@@ -2,11 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Card, StatusBadge, DetailRow } from "@/components/ui/card";
+import { Card, StatusBadge } from "@/components/ui/card";
 import { Spinner, ErrorBanner } from "@/components/ui/loading";
 import { exportSimulationMarkdown } from "@/components/export-markdown";
 import { FluxMap } from "@/components/flux-map";
 import { ProcessTrace } from "@/components/process-trace";
+import { Pencil, Check, X } from "lucide-react";
+import { runLabel, simTitle, autoTitle, fullTitle, conditionLine, formatDateTime, formatGrowth, GROWTH_UNIT } from "@/lib/sim-format";
+
+const API = "http://localhost:8000/api/v1";
 
 interface ExpressionResult {
   gene_id: string;
@@ -40,6 +44,8 @@ interface FbaResults {
 
 interface SimulationDetail {
   id: string;
+  run_number: number | null;
+  name: string | null;
   status: string;
   growth_state?: string;
   solver_status?: string;
@@ -77,12 +83,18 @@ export default function SimulationDetailPage() {
   const [rawExpanded, setRawExpanded] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [deleting, setDeleting] = useState<boolean>(false);
+  const [confirmDelete, setConfirmDelete] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Rename: null = not editing, otherwise the text being typed
+  const [draftName, setDraftName] = useState<string | null>(null);
+  const [savingName, setSavingName] = useState<boolean>(false);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSim = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`http://localhost:8000/api/v1/results/${id}`);
+        const response = await fetch(`${API}/results/${id}`);
         if (!response.ok) {
           throw new Error(`Failed to fetch simulation detail: ${response.statusText}`);
         }
@@ -99,18 +111,43 @@ export default function SimulationDetailPage() {
     }
   }, [id]);
 
+  // Browser tab shows "#12 · Heat shock test · GENESIS" instead of the generic site title
+  useEffect(() => {
+    if (sim) document.title = `${fullTitle(sim)} · GENESIS`;
+  }, [sim]);
+
+  // Same in-page confirmation as the Results list (no browser pop-up)
   const handleDelete = async () => {
-    if (!window.confirm("Delete this simulation? This cannot be undone.")) return;
     try {
       setDeleting(true);
-      const res = await fetch(`http://localhost:8000/api/v1/results/${id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to delete simulation");
+      setDeleteError(null);
+      const res = await fetch(`${API}/results/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
       router.push("/results");
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Delete failed");
+      setDeleteError(err instanceof Error ? err.message : "Delete failed");
       setDeleting(false);
+    }
+  };
+
+  const saveName = async () => {
+    if (draftName === null || !sim) return;
+    try {
+      setSavingName(true);
+      setNameError(null);
+      const res = await fetch(`${API}/results/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: draftName }),
+      });
+      if (!res.ok) throw new Error(res.status === 422 ? "Name is too long (120 characters max)" : `Save failed (${res.status})`);
+      const data = (await res.json()) as { name: string | null };
+      setSim({ ...sim, name: data.name });
+      setDraftName(null);
+    } catch (err: unknown) {
+      setNameError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSavingName(false);
     }
   };
 
@@ -134,7 +171,7 @@ export default function SimulationDetailPage() {
     return <ErrorBanner message={error || "Simulation not found."} />;
   }
 
-  const conditionSummary = `${sim.temperature}°C · pH ${sim.ph} · ${sim.oxygen_level} · ${sim.carbon_source}`;
+  const conditionSummary = conditionLine(sim);
 
   // B1: show the biological growth state, not the LP solver status.
   const growthState = sim.growth_state ?? sim.fba_results?.growth_state ?? sim.status;
@@ -153,39 +190,99 @@ export default function SimulationDetailPage() {
           >
             ← Results
           </button>
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-medium text-[#eaffff]">Simulation {id.slice(0, 8)}...</h1>
-            <span className="text-xs text-subtle font-mono-readout">{new Date(sim.created_at).toLocaleString()}</span>
-          </div>
-          <p className="text-sm text-[#8cc3d4] mt-1">{conditionSummary}</p>
+          {draftName === null ? (
+            <div className="flex items-center gap-3 flex-wrap">
+              {sim.run_number != null && (
+                <span className="text-xl font-mono-readout text-[#5c8494]">{runLabel(sim)}</span>
+              )}
+              <h1 className="text-xl font-medium text-[#eaffff]">{simTitle(sim)}</h1>
+              <button
+                onClick={() => { setDraftName(sim.name ?? ""); setNameError(null); }}
+                className="p-1 text-[#5c8494] hover:text-[#7dffef] transition-colors"
+                title="Rename"
+                aria-label="Rename simulation"
+              >
+                <Pencil className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => { e.preventDefault(); saveName(); }}
+              className="flex items-center gap-2 flex-wrap"
+            >
+              {sim.run_number != null && (
+                <span className="text-xl font-mono-readout text-[#5c8494]">{runLabel(sim)}</span>
+              )}
+              <input
+                autoFocus
+                value={draftName}
+                maxLength={120}
+                onChange={(e) => setDraftName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Escape") setDraftName(null); }}
+                placeholder={autoTitle(sim)}
+                aria-label="Simulation name"
+                className="w-72 max-w-full px-3 py-1.5 rounded-lg bg-[#01070c]/60 border border-[#3ef2ff]/40 text-[#eaffff] text-base focus:outline-none focus:border-[#3ef2ff]/80"
+              />
+              <button type="submit" disabled={savingName} className="p-1.5 text-[#7dffef] hover:text-[#eaffff] disabled:opacity-50" title="Save" aria-label="Save name">
+                <Check className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => setDraftName(null)} className="p-1.5 text-[#5c8494] hover:text-[#eaffff]" title="Cancel" aria-label="Cancel rename">
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <span className="w-full text-xs text-[#5c8494]">Leave empty to use the automatic title. Enter saves, Esc cancels.</span>
+            </form>
+          )}
+          {nameError && <p className="text-xs text-[#ff8b6e] mt-1">{nameError}</p>}
+          <p className="text-sm text-[#8cc3d4] mt-1">
+            {sim.name ? `${conditionSummary} · ` : ""}{formatDateTime(sim.created_at)}
+          </p>
         </div>
 
         <div className="flex gap-3">
           <button
             onClick={() => exportSimulationMarkdown(sim)}
-            className="px-4 py-2 text-sm rounded bg-white/[0.04] border border-white/[0.07] text-[#eaffff] hover:bg-white/[0.08] transition-colors"
+            className="px-4 py-2 text-sm rounded-xl bg-white/[0.04] border border-white/[0.07] text-[#eaffff] hover:bg-white/[0.08] transition-colors"
           >
             Export .md
           </button>
           <button
-            onClick={handleDelete}
+            onClick={() => { setDeleteError(null); setConfirmDelete(true); }}
             disabled={deleting}
-            className="px-4 py-2 text-sm rounded bg-red-900/30 border border-red-500/30 text-red-400 hover:bg-red-900/50 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm rounded-xl bg-red-900/30 border border-red-500/30 text-red-400 hover:bg-red-900/50 transition-colors disabled:opacity-50"
           >
-            {deleting ? "Deleting..." : "Delete"}
+            Delete
           </button>
         </div>
       </div>
 
+      {/* Delete confirmation (matches the Results list) */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => !deleting && setConfirmDelete(false)}>
+          <div className="p-6 max-w-sm mx-4 bg-[#031722] border border-white/[0.07] rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-[#d9f7ff] mb-2">Delete {runLabel(sim) || "this simulation"}?</h3>
+            <p className="text-xs text-[#8cc3d4] mb-4">This action cannot be undone. The simulation data will be permanently removed.</p>
+            {deleteError && <p className="text-xs text-[#ff8b6e] mb-3">{deleteError}. Nothing was removed; try again.</p>}
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmDelete(false)} disabled={deleting}
+                className="px-4 py-1.5 text-xs rounded-xl bg-white/[0.05] text-[#8cc3d4] border border-white/10 hover:bg-white/[0.08] transition-colors disabled:opacity-50">Cancel</button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="px-4 py-1.5 text-xs rounded-xl bg-[#ff5a36]/20 text-[#ff5a36] border border-[#ff5a36]/30 hover:bg-[#ff5a36]/30 transition-colors disabled:opacity-50">
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary Strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl backdrop-blur-md p-4 flex flex-col items-center justify-center">
-          <div className="text-2xl font-mono-readout text-[#3ef2ff] glow-text">{sim.growth_rate?.toFixed(3) || "0"} h⁻¹</div>
+          <div className="text-2xl font-mono-readout text-[#3ef2ff] glow-text">{formatGrowth(sim.growth_rate, false)} {GROWTH_UNIT}</div>
           <div className="text-xs text-[#5c8494] mt-1 uppercase tracking-wider">Growth Rate</div>
         </div>
         <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl backdrop-blur-md p-4 flex flex-col items-center justify-center">
           <div className="text-2xl font-mono-readout text-[#3ef2ff] glow-text">
-            {sim.doubling_time != null ? `${sim.doubling_time.toFixed(2)} hr` : "∞"}
+            {sim.doubling_time != null ? `${sim.doubling_time.toFixed(2)} h` : "∞"}
           </div>
           <div className="text-xs text-[#5c8494] mt-1 uppercase tracking-wider">Doubling Time</div>
         </div>
@@ -209,36 +306,39 @@ export default function SimulationDetailPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Environment Section */}
-        <Card className="lg:col-span-1 h-fit p-5">
-          <h3 className="text-sm font-semibold text-[#d9f7ff] mb-3">Environment Conditions</h3>
-          <div className="space-y-3">
-            <DetailRow label="Temperature" value={`${sim.temperature} °C`} />
-            <DetailRow label="pH Level" value={`${sim.ph}`} />
-            <DetailRow label="Oxygen" value={sim.oxygen_level} />
-            <DetailRow label="Carbon Source" value={sim.carbon_source} />
-            <DetailRow label="Nitrogen Source" value={sim.nitrogen_source} />
-          </div>
-        </Card>
+      {/* Environment: one compact row instead of a tall card next to a short one */}
+      <Card className="p-5">
+        <h3 className="text-sm font-semibold text-[#d9f7ff] mb-3">Environment Conditions</h3>
+        <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {[
+            ["Temperature", `${sim.temperature} °C`],
+            ["pH", `${sim.ph}`],
+            ["Oxygen", sim.oxygen_level],
+            ["Carbon source", sim.carbon_source],
+            ["Nitrogen source", sim.nitrogen_source],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-xs text-[#5c8494] uppercase tracking-wider">{label}</dt>
+              <dd className="text-[#eaffff] font-mono-readout mt-1">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
 
-        {/* Process Trace */}
-        <div className="lg:col-span-2">
-          <ProcessTrace
-            computeTimeMs={sim.compute_time_ms}
-            modelVersions={sim.model_versions || {}}
-            temperature={sim.temperature}
-            ph={sim.ph}
-            oxygenLevel={sim.oxygen_level}
-            carbonSource={sim.carbon_source}
-            nitrogenSource={sim.nitrogen_source}
-            status={sim.status}
-            growthRate={sim.growth_rate}
-            activePathwayCount={sim.fba_results?.active_pathways?.length || 0}
-            expressionCount={summary?.total_genes_evaluated ?? expressionResults.length}
-          />
-        </div>
-      </div>
+      {/* Process Trace (full width; expands downward when opened) */}
+      <ProcessTrace
+        computeTimeMs={sim.compute_time_ms}
+        modelVersions={sim.model_versions || {}}
+        temperature={sim.temperature}
+        ph={sim.ph}
+        oxygenLevel={sim.oxygen_level}
+        carbonSource={sim.carbon_source}
+        nitrogenSource={sim.nitrogen_source}
+        status={sim.status}
+        growthRate={sim.growth_rate}
+        activePathwayCount={sim.fba_results?.active_pathways?.length || 0}
+        expressionCount={summary?.total_genes_evaluated ?? expressionResults.length}
+      />
 
       {/* Flux Map */}
       <div className="mt-8">

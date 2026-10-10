@@ -328,7 +328,7 @@ export function FluxMap({
           </span>
           {growthRate != null && (
             <span className="text-xs text-[#5c8494] font-mono-readout">
-              growth <span className="text-lg font-semibold text-[#3ef2ff] glow-text">{growthRate}</span> h⁻¹
+              growth <span className="text-lg font-semibold text-[#3ef2ff] glow-text">{growthRate.toFixed(3)}</span> h⁻¹
             </span>
           )}
         </div>

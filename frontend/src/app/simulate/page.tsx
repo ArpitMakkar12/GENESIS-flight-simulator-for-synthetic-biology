@@ -10,6 +10,7 @@ import { Card, MetricCard } from "@/components/ui/card";
 import { LaunchSequence, ErrorBanner } from "@/components/ui/loading";
 import { EnvParams, PRESETS, DEFAULT_PARAMS, shallowEqual } from "@/lib/presets";
 import { Timer, HeartPulse, Zap, FlaskConical, LoaderCircle, Play } from "lucide-react";
+import { GROWTH_UNIT } from "@/lib/sim-format";
 
 const API = "http://localhost:8000/api/v1";
 
@@ -17,6 +18,8 @@ const API = "http://localhost:8000/api/v1";
 
 interface SimulationResult {
   task_id: string;
+  run_number?: number | null;
+  name?: string | null;
   status: string;
   solver_status?: string | null;
   growth_state?: string | null;
@@ -55,6 +58,7 @@ function SimulateContent() {
   // ── Single source of truth for environment parameters ──
   const [params, setParams] = useState<EnvParams>(DEFAULT_PARAMS);
   const [sequence, setSequence] = useState("");
+  const [runName, setRunName] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +130,7 @@ function SimulateContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          name: runName.trim() || null,
           raw_sequence: sequence || null,
           temperature: submittedParams.temperature,
           ph: submittedParams.ph,
@@ -187,6 +192,24 @@ function SimulateContent() {
             <div className="flex-1 h-px bg-white/[0.07]" />
           </div>
 
+          {/* Optional run name */}
+          <Card className="p-6">
+            <label htmlFor="run-name" className="block text-lg font-semibold text-[#d9f7ff] mb-1">
+              Run Name <span className="text-sm font-normal text-[#5c8494]">(optional)</span>
+            </label>
+            <p className="text-xs text-[#5c8494] mb-3">
+              Shown on the Results page. Leave empty and the run is titled from its conditions, e.g. &quot;Glucose · aerobic · 37 °C · pH 7&quot;.
+            </p>
+            <input
+              id="run-name"
+              value={runName}
+              maxLength={120}
+              onChange={(e) => setRunName(e.target.value)}
+              placeholder="e.g. Heat shock test"
+              className="w-full px-4 py-2.5 rounded-xl bg-[#01070c]/60 border border-white/10 text-[#eaffff] text-sm placeholder-[#5c8494] focus:outline-none focus:border-[#3ef2ff]/60 focus:shadow-[0_0_0_1px_rgba(62,242,255,0.25)] transition-colors"
+            />
+          </Card>
+
           {/* DNA Input */}
           <Card className="p-6">
             <h2 className="text-lg font-semibold text-[#d9f7ff] mb-3">DNA Sequence Input</h2>
@@ -239,7 +262,7 @@ function SimulateContent() {
                   <div>
                     <div className="text-xs text-[#8cc3d4] mb-1">growth rate</div>
                     <div className="text-5xl font-light text-[#eaffff] font-mono-readout glow-text leading-none">
-                      {result.growth_rate}<span className="text-lg text-[#5c8494] ml-2">hr⁻¹</span>
+                      {result.growth_rate != null ? result.growth_rate.toFixed(3) : "—"}<span className="text-lg text-[#5c8494] ml-2">{GROWTH_UNIT}</span>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                       <div className={`h-2 w-2 rounded-full ${result.growth_rate != null && result.growth_rate > 0.5 ? 'bg-[#3ef2ff] shadow-[0_0_8px_rgba(62,242,255,0.6)]' : 'bg-[#ffcf66]'}`} />
@@ -248,7 +271,8 @@ function SimulateContent() {
                   </div>
                   {/* Run metadata — moved here from page footer */}
                   <div className="text-right text-xs text-[#5c8494] font-mono-readout space-y-0.5">
-                    <div>Task: {result.task_id?.slice(0, 8)}</div>
+                    <div>{result.run_number != null ? `Run #${result.run_number}` : `Task: ${result.task_id?.slice(0, 8)}`}</div>
+                    {result.name && <div className="text-[#8cc3d4] max-w-[14rem] truncate">{result.name}</div>}
                     <div>Model: {result.model_versions?.predictor || "iML1515"}</div>
                   </div>
                 </div>
@@ -258,7 +282,7 @@ function SimulateContent() {
               <div className="grid grid-cols-3 gap-3">
                 <MetricCard
                   label="Doubling Time"
-                  value={result.doubling_time != null ? `${result.doubling_time} hr` : "N/A"}
+                  value={result.doubling_time != null ? `${result.doubling_time.toFixed(2)} h` : "N/A"}
                   color="blue"
                   icon={Timer}
                 />
@@ -292,7 +316,7 @@ function SimulateContent() {
                       </RadialBarChart>
                     </ResponsiveContainer>
                     <div className="text-center mt-2">
-                      <div className="text-3xl font-light text-[#eaffff] font-mono-readout glow-text">{result.growth_rate} hr⁻¹</div>
+                      <div className="text-3xl font-light text-[#eaffff] font-mono-readout glow-text">{result.growth_rate != null ? result.growth_rate.toFixed(3) : "—"} {GROWTH_UNIT}</div>
                       <div className="text-xs text-[#5c8494] mt-1">of ~0.88 theoretical max</div>
                     </div>
                   </Card>

@@ -5,6 +5,7 @@ from datetime import datetime
 
 
 class SimulationRequest(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=120)  # optional label, e.g. "Heat shock test"
     construct_id: Optional[UUID] = None
     raw_sequence: Optional[str] = None
     temperature: float = Field(default=37.0, ge=20.0, le=50.0)
@@ -36,6 +37,8 @@ class SimulationResponse(BaseModel):
     model_config = {"protected_namespaces": (), "from_attributes": True}
 
     task_id: UUID
+    run_number: Optional[int] = None             # permanent #1, #2, ... for this run
+    name: Optional[str] = None                   # user-given label, if any
     solver_status: Optional[str] = None          # FBA solver outcome: 'optimal', 'infeasible'
     growth_state: Optional[str] = None           # human-readable: 'optimal', 'slowed', 'stressed', 'not-viable'
     status: Optional[str] = None                 # kept for backwards compat (= solver_status)
@@ -57,4 +60,3 @@ class SimulationResponse(BaseModel):
     conditions: Optional[dict] = None
     computed_at: Optional[datetime] = None
     compute_time_ms: Optional[int] = None
-
