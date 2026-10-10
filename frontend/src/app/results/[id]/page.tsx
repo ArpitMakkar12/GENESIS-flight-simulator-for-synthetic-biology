@@ -6,6 +6,7 @@ import { Card, StatusBadge } from "@/components/ui/card";
 import { Spinner, ErrorBanner } from "@/components/ui/loading";
 import { exportSimulationMarkdown, exportSimulationPdf } from "@/components/export-markdown";
 import { PdfButton } from "@/components/pdf-button";
+import { CopyButton } from "@/components/copy-button";
 import { FluxMap } from "@/components/flux-map";
 import { ProcessTrace } from "@/components/process-trace";
 import { GeneExpression, type GeneRow, type ExpressionSummary } from "@/components/gene-expression";
@@ -63,7 +64,6 @@ export default function SimulationDetailPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [rawExpanded, setRawExpanded] = useState<boolean>(false);
-  const [copied, setCopied] = useState<boolean>(false);
   const [deleting, setDeleting] = useState<boolean>(false);
   const [confirmDelete, setConfirmDelete] = useState<boolean>(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -130,14 +130,6 @@ export default function SimulationDetailPage() {
       setNameError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSavingName(false);
-    }
-  };
-
-  const handleCopyRaw = () => {
-    if (sim) {
-      navigator.clipboard.writeText(JSON.stringify(sim, null, 2));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -378,12 +370,12 @@ export default function SimulationDetailPage() {
 
         {rawExpanded && (
           <div className="p-4 border-t border-white/[0.07] relative">
-            <button
-              onClick={handleCopyRaw}
-              className="absolute top-4 right-4 px-3 py-1 bg-white/[0.1] text-xs rounded hover:bg-white/[0.2] transition-colors text-[#eaffff]"
-            >
-              {copied ? "Copied!" : "Copy"}
-            </button>
+            {/* right-8 keeps the button clear of the JSON box's scrollbar */}
+            <CopyButton
+              getText={() => JSON.stringify(sim, null, 2)}
+              label="Copy raw JSON"
+              className="absolute top-6 right-8 z-10"
+            />
             <pre className="text-xs text-[#5c8494] font-mono-readout overflow-auto max-h-[400px] p-2 bg-[#01070c]/50 rounded">
               {JSON.stringify(sim, null, 2)}
             </pre>
