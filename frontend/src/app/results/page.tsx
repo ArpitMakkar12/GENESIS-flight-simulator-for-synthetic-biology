@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, StatusBadge } from "@/components/ui/card";
 import { EmptyState, ErrorBanner } from "@/components/ui/loading";
-import { ChartColumn, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { ChartColumn, ChevronLeft, ChevronRight, Search, Trash2, X } from "lucide-react";
 import { runLabel, simTitle, conditionLine, formatDateTime, formatGrowth } from "@/lib/sim-format";
 import { MAX_COMPARE } from "@/lib/pathway-diff";
 
@@ -36,6 +36,11 @@ export default function ResultsPage() {
   const [sortAsc, setSortAsc] = useState(false);
   const [filterOxygen, setFilterOxygen] = useState<string>("");
   const [filterCarbon, setFilterCarbon] = useState<string>("");
+  // Search: `searchText` is what is typed; `query` is sent to the server
+  // 300 ms after typing stops, so we don't fire a request on every key.
+  const [searchText, setSearchText] = useState<string>("");
+  const [query, setQuery] = useState<string>("");
+  const queryRef = useRef<string>(""); // last query sent, to skip no-op changes
   const [oxygenOptions, setOxygenOptions] = useState<string[]>([]);
   const [carbonOptions, setCarbonOptions] = useState<string[]>([]);
   const [reloadKey, setReloadKey] = useState(0); // bump to re-fetch the current page
@@ -57,6 +62,17 @@ export default function ResultsPage() {
       .catch(() => {});
   }, [reloadKey]);
 
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const next = searchText.trim();
+      if (next === queryRef.current) return; // e.g. only a space was added
+      queryRef.current = next;
+      setQuery(next);
+      setPage(0); // a new search starts on page 1
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchText]);
+
   // The server does the filtering, sorting and paging, so they cover every simulation
   useEffect(() => {
     const controller = new AbortController();
@@ -68,6 +84,7 @@ export default function ResultsPage() {
     });
     if (filterOxygen) params.set("oxygen", filterOxygen);
     if (filterCarbon) params.set("carbon", filterCarbon);
+    if (query) params.set("q", query);
 
     setLoading(true);
     fetch(`${API}/results?${params}`, { signal: controller.signal })
@@ -90,7 +107,7 @@ export default function ResultsPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [page, sortKey, sortAsc, filterOxygen, filterCarbon, reloadKey]);
+  }, [page, sortKey, sortAsc, filterOxygen, filterCarbon, query, reloadKey]);
 
   // One request for any number of rows. Afterwards the page is re-fetched,
   // so rows from the next page slide up to fill the gap.
@@ -152,7 +169,10 @@ export default function ResultsPage() {
   };
 
   const canCompare = selectedIds.size >= 2 && selectedIds.size <= MAX_COMPARE;
-  const filtering = !!(filterOxygen || filterCarbon);
+  const filtering = !!(filterOxygen || filterCarbon || query);
+  const clearAll = () => {
+    setFilterOxygen(""); setFilterCarbon(""); setSearchText(""); setQuery(""); queryRef.current = ""; setPage(0);
+  };
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const firstRow = total === 0 ? 0 : page * PAGE_SIZE + 1;
   const lastRow = Math.min(total, (page + 1) * PAGE_SIZE);
@@ -173,8 +193,30 @@ export default function ResultsPage() {
       </div>
       <p className="text-sm text-[#8cc3d4] mb-6">Click a row to view full detail · Select 2–{MAX_COMPARE} to compare, or any number to delete</p>
 
-      {/* Filters */}
+      {/* Search + filters */}
       <div className="flex flex-wrap gap-3 mb-4">
+        <div className="relative flex-1 min-w-[16rem]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#5c8494]" aria-hidden="true" />
+          <input
+            type="search"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") setSearchText(""); }}
+            placeholder="Search: name, #145, glucose, anaerobic, 37°C, pH 7…"
+            aria-label="Search simulations"
+            maxLength={100}
+            className="w-full pl-9 pr-9 py-1.5 rounded-xl bg-[#01070c]/60 border border-white/10 text-[#eaffff] text-sm placeholder-[#5c8494] focus:border-[#3ef2ff]/60 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+          />
+          {searchText && (
+            <button
+              onClick={() => setSearchText("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#5c8494] hover:text-[#eaffff]"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          )}
+        </div>
         <select value={filterOxygen} onChange={(e) => { setFilterOxygen(e.target.value); setPage(0); }} className={selectCls} aria-label="Filter by oxygen">
           <option value="">All Oxygen</option>
           {oxygenOptions.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -184,8 +226,8 @@ export default function ResultsPage() {
           {carbonOptions.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         {filtering && (
-          <button onClick={() => { setFilterOxygen(""); setFilterCarbon(""); setPage(0); }}
-            className="px-3 py-1.5 text-xs text-[#8cc3d4] hover:text-[#eaffff] transition-colors">Clear filters</button>
+          <button onClick={clearAll}
+            className="px-3 py-1.5 text-xs text-[#8cc3d4] hover:text-[#eaffff] transition-colors">Clear all</button>
         )}
       </div>
 
@@ -218,7 +260,10 @@ export default function ResultsPage() {
               {!loading && sims.length === 0 && (
                 <tr><td colSpan={8}>
                   {filtering ? (
-                    <p className="p-8 text-center text-sm text-[#8cc3d4]">No simulations match these filters.</p>
+                    <p className="p-8 text-center text-sm text-[#8cc3d4]">
+                      {query ? <>No simulations match “{query}”{filterOxygen || filterCarbon ? " with these filters" : ""}.</> : "No simulations match these filters."}
+                      <button onClick={clearAll} className="ml-2 text-[#7dffef] hover:underline">Clear all</button>
+                    </p>
                   ) : (
                     <EmptyState icon={ChartColumn} title="No simulations yet" description="Run your first simulation to see results here." actionLabel="Go to Simulate" actionHref="/simulate" />
                   )}

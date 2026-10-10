@@ -1,9 +1,10 @@
+import re
 from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -67,6 +68,53 @@ def _summary(s: Simulation) -> dict:
     }
 
 
+OXYGEN_WORDS = {"aerobic", "anaerobic", "microaerobic"}
+
+
+def _search_conditions(q: str) -> list:
+    """Turn a search box text into database conditions.
+
+    Every word must match something (so "glucose anaerobic" narrows down),
+    and each word can match any field:
+      #145        -> run number 145
+      37c / 37°c  -> temperature 37
+      ph7 / ph6.5 -> pH
+      145 / 37    -> run number, temperature or pH
+      aerobic     -> exactly aerobic (so it does not also match "anaerobic")
+      anything    -> part of the name, carbon source, oxygen or nitrogen source
+    """
+    conditions = []
+    text = q.lower()
+    text = re.sub(r"\bph\s+(?=\d)", "ph", text)        # "pH 7" -> "ph7"
+    text = re.sub(r"(\d)\s*°\s*c\b", r"\1c", text)      # "37 °C" -> "37c"
+    words = [w for w in text.split() if re.search(r"[a-z0-9]", w)]  # drop "·", "-" ...
+    for word in words[:8]:
+        if m := re.fullmatch(r"#(\d+)", word):
+            conditions.append(Simulation.run_number == int(m.group(1)))
+        elif m := re.fullmatch(r"(\d+(?:\.\d+)?)°?c", word):
+            conditions.append(Simulation.temperature == float(m.group(1)))
+        elif m := re.fullmatch(r"ph(\d+(?:\.\d+)?)", word):
+            conditions.append(Simulation.ph == float(m.group(1)))
+        elif re.fullmatch(r"\d+(?:\.\d+)?", word):
+            n = float(word)
+            options = [Simulation.temperature == n, Simulation.ph == n]
+            if n.is_integer():
+                options.append(Simulation.run_number == int(n))
+            conditions.append(or_(*options))
+        elif word in OXYGEN_WORDS:
+            conditions.append(or_(Simulation.oxygen_level == word, Simulation.name.ilike(f"%{word}%")))
+        else:
+            # escape % and _ so they are searched literally
+            like = "%" + word.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            conditions.append(or_(
+                Simulation.name.ilike(like, escape="\\"),
+                Simulation.carbon_source.ilike(like, escape="\\"),
+                Simulation.oxygen_level.ilike(like, escape="\\"),
+                Simulation.nitrogen_source.ilike(like, escape="\\"),
+            ))
+    return conditions
+
+
 # NOTE: the fixed paths (/results, /results/filters, /results/bulk-delete) are
 # declared before /results/{task_id}; otherwise FastAPI would try to read the
 # word "filters" as a simulation id.
@@ -78,6 +126,7 @@ async def list_results(
     offset: int = Query(0, ge=0),
     oxygen: Optional[str] = Query(None, description="Only this oxygen level"),
     carbon: Optional[str] = Query(None, description="Only this carbon source"),
+    q: Optional[str] = Query(None, max_length=100, description="Search text, e.g. 'glucose 37c', '#145', 'heat shock'"),
     sort: Literal["created_at", "run_number", "growth_rate", "viability_score"] = "created_at",
     order: Literal["asc", "desc"] = "desc",
     db: AsyncSession = Depends(get_db),
@@ -92,6 +141,8 @@ async def list_results(
         conditions.append(Simulation.oxygen_level == oxygen)
     if carbon:
         conditions.append(Simulation.carbon_source == carbon)
+    if q and q.strip():
+        conditions.extend(_search_conditions(q))
 
     column = getattr(Simulation, sort)
     ordering = column.asc() if order == "asc" else column.desc()
