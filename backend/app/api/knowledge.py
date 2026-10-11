@@ -32,29 +32,43 @@ async def get_gene(
     return gene
 
 
-@router.get("/genes", response_model=list[GeneResponse])
+@router.get("/genes")
 async def search_genes(
     search: Optional[str] = Query(None, description="Search by name, locus_tag, or product"),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    """Search genes by name, locus_tag, or product description."""
+    """List genes one page at a time, optionally narrowed by a search.
+
+    With no search this pages through every gene in locus-tag order, so the
+    Library can show the full list straight away. Returns the same shape as
+    /results: {items, total, limit, offset}, where total is the number of
+    matching genes (used for "Showing 1-25 of 4,651" and the page buttons).
+    """
     query = select(Gene)
+    count_query = select(func.count(Gene.id))
 
-    if search:
-        pattern = f"%{search}%"
-        query = query.where(
-            or_(
-                Gene.name.ilike(pattern),
-                Gene.locus_tag.ilike(pattern),
-                Gene.product.ilike(pattern),
-            )
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        condition = or_(
+            Gene.name.ilike(pattern),
+            Gene.locus_tag.ilike(pattern),
+            Gene.product.ilike(pattern),
         )
+        query = query.where(condition)
+        count_query = count_query.where(condition)
 
+    total = (await db.execute(count_query)).scalar() or 0
     query = query.order_by(Gene.locus_tag).offset(offset).limit(limit)
-    result = await db.execute(query)
-    return result.scalars().all()
+    genes = (await db.execute(query)).scalars().all()
+
+    return {
+        "items": [GeneResponse.model_validate(g).model_dump(mode="json") for g in genes],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/tfs", response_model=list[TFResponse])

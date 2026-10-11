@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/loading';
 import {
@@ -12,11 +12,17 @@ import {
   getTFFields,
   getPathwayFields,
 } from '@/components/reference/field-config';
-import { Dna, Network, Workflow, SearchX } from "lucide-react";
+import { Dna, Network, Workflow, SearchX, ChevronLeft, ChevronRight } from "lucide-react";
+import { LibrarySearch } from '@/components/library/library-search';
 
 export type KnowledgeTab = 'genes' | 'tfs' | 'pathways';
 
 const API_BASE = 'http://localhost:8000/api/v1';
+
+/** Genes shown per page, and the Prev/Next button style — both match the Results page. */
+const GENE_PAGE_SIZE = 25;
+const PAGE_BTN =
+  "inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-xl bg-white/[0.05] text-[#8cc3d4] border border-white/10 hover:bg-white/[0.08] transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -106,12 +112,21 @@ export function KnowledgeTabs({
 }) {
 
   // ── Genes state ──
+  // geneSearch is what's in the box; geneQuery is the search actually applied
+  // (it follows geneSearch 300 ms after typing stops).
   const [geneSearch, setGeneSearch] = useState('');
+  const [geneQuery, setGeneQuery] = useState('');
+  const [genePage, setGenePage] = useState(0);
   const [genes, setGenes] = useState<Gene[]>([]);
+  const [geneTotal, setGeneTotal] = useState(0);
   const [geneLoading, setGeneLoading] = useState(false);
-  const [geneSearched, setGeneSearched] = useState(false);
+  const [geneLoaded, setGeneLoaded] = useState(false);  // first page has arrived
+  const [geneError, setGeneError] = useState<string | null>(null);
   const [selectedGene, setSelectedGene] = useState<Gene | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const geneRequestRef = useRef(0);                      // ignore answers to old requests
+  const selectExactRef = useRef<string | null>(null);    // gene to open after following a link
+  const geneTableRef = useRef<HTMLDivElement | null>(null);
 
   // ── TFs state ──
   const [tfs, setTfs] = useState<TF[]>([]);
@@ -130,33 +145,71 @@ export function KnowledgeTabs({
   const [pwDetailLoading, setPwDetailLoading] = useState(false);
   const [pwReactionFilter, setPwReactionFilter] = useState('');
 
-  /* ─── Gene search with debounce ──────────────────── */
+  /* ─── Genes: one page at a time, narrowed by the search ─── */
 
-  const searchGenes = useCallback(async (query: string, selectExact = false) => {
-    if (!query.trim()) { setGenes([]); setGeneSearched(false); return; }
+  // Load the current page whenever the Genes tab is open and the page or the
+  // applied search changes. With an empty search this pages through every gene,
+  // so the full list is there as soon as you open the tab.
+  useEffect(() => {
+    if (activeTab !== 'genes') return;
+    const id = ++geneRequestRef.current;
     setGeneLoading(true);
-    setGeneSearched(true);
-    try {
-      const res = await fetch(`${API_BASE}/genes?search=${encodeURIComponent(query)}&limit=50`);
-      if (res.ok) {
-        const found: Gene[] = await res.json();
-        setGenes(found);
-        // From a link: open the gene whose locus tag or name is exactly the query
-        if (selectExact) {
-          const q = query.trim().toLowerCase();
-          const exact = found.find(g => g.locus_tag.toLowerCase() === q || (g.name || '').toLowerCase() === q);
-          if (exact) setSelectedGene(exact);
-        }
-      }
-    } catch (e) { console.error(e); }
-    setGeneLoading(false);
-  }, []);
+    setGeneError(null);
 
+    const params = new URLSearchParams({
+      limit: String(GENE_PAGE_SIZE),
+      offset: String(genePage * GENE_PAGE_SIZE),
+    });
+    if (geneQuery) params.set('search', geneQuery);
+
+    fetch(`${API_BASE}/genes?${params}`)
+      .then(res => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((data: { items: Gene[]; total: number }) => {
+        if (id !== geneRequestRef.current) return;
+        setGenes(data.items);
+        setGeneTotal(data.total);
+        setGeneLoaded(true);
+        // Followed a link such as ?gene=b0903: open that gene's details
+        const wanted = selectExactRef.current?.toLowerCase();
+        if (wanted) {
+          const exact = data.items.find(
+            g => g.locus_tag.toLowerCase() === wanted || (g.name || '').toLowerCase() === wanted
+          );
+          if (exact) setSelectedGene(exact);
+          selectExactRef.current = null;
+        }
+      })
+      .catch(() => {
+        if (id === geneRequestRef.current) setGeneError('Could not load genes. Is the backend running?');
+      })
+      .finally(() => {
+        if (id === geneRequestRef.current) setGeneLoading(false);
+      });
+  }, [activeTab, geneQuery, genePage]);
+
+  // Typing: wait 300 ms, then apply the search and go back to page 1
   const onGeneSearchChange = (val: string) => {
     setGeneSearch(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => searchGenes(val), 400);
+    debounceRef.current = setTimeout(() => {
+      setGeneQuery(val.trim());
+      setGenePage(0);
+    }, 300);
   };
+
+  // Changing page: if the top of the table has scrolled out of sight,
+  // bring it back so the new page starts at the top
+  const goToGenePage = (next: number) => {
+    setGenePage(next);
+    const top = geneTableRef.current?.getBoundingClientRect().top;
+    if (top !== undefined && top < 80) {
+      window.scrollTo({ top: window.scrollY + top - 90, behavior: 'smooth' });
+    }
+  };
+
+  const genePageCount = Math.max(1, Math.ceil(geneTotal / GENE_PAGE_SIZE));
+  const geneFirstRow = geneTotal === 0 ? 0 : genePage * GENE_PAGE_SIZE + 1;
+  const geneLastRow = Math.min(geneTotal, (genePage + 1) * GENE_PAGE_SIZE);
 
   /* ─── TF loading ─────────────────────────────────── */
 
@@ -215,9 +268,11 @@ export function KnowledgeTabs({
   // Opened from a link: search for that gene / open that TF or pathway
   useEffect(() => {
     if (!initialGene) return;
+    selectExactRef.current = initialGene;
     setGeneSearch(initialGene);
-    searchGenes(initialGene, true);
-  }, [initialGene, searchGenes]);
+    setGeneQuery(initialGene);
+    setGenePage(0);
+  }, [initialGene]);
   useEffect(() => {
     if (initialTf) loadTFDetail(initialTf);
   }, [initialTf]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -249,62 +304,37 @@ export function KnowledgeTabs({
       {/* ═══════════════════════════════════════════════════ */}
       {activeTab === 'genes' && (
         <div>
-          {/* Search bar */}
-          <div className="flex gap-3 mb-4">
-            <input
-              type="text"
+          {/* Search bar — results update as you type */}
+          <div className="mb-4">
+            <LibrarySearch
               value={geneSearch}
-              onChange={(e) => onGeneSearchChange(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && searchGenes(geneSearch)}
+              onChange={onGeneSearchChange}
+              busy={geneLoading}
+              label="Search genes"
               placeholder="Search by gene name, locus tag, or product (e.g. lacZ, b0344, polymerase)"
-              className="flex-1 px-4 py-2.5 rounded-xl bg-[#01070c]/60 border border-white/10 text-[#eaffff] text-sm placeholder-[#5c8494] focus:outline-none focus:border-[#3ef2ff]/60 transition-colors"
             />
-            <button
-              onClick={() => searchGenes(geneSearch)}
-              disabled={geneLoading}
-              className="px-5 py-2 rounded-full bg-[#3ef2ff]/15 text-[#7dffef] border border-[#3ef2ff]/40 text-sm font-medium hover:bg-[#3ef2ff]/25 transition-all disabled:opacity-50 shadow-[0_0_16px_-4px_rgba(62,242,255,0.3)]"
-            >
-              {geneLoading ? 'Searching...' : 'Search'}
-            </button>
           </div>
 
-          {/* Prompt / Loading / Empty / Results */}
-          {!geneSearched ? (
-            /* Initial prompt state */
-            <Card className="p-8 text-center border-dashed">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#3ef2ff]/10 ring-1 ring-[#3ef2ff]/25">
-                <Dna className="h-7 w-7 text-[#7dffef]" strokeWidth={1.5} aria-hidden="true" />
-              </div>
-              <p className="text-[#8cc3d4] mb-3">Search 4,651 genes by name, locus tag, or product</p>
-              <div className="flex gap-2 justify-center flex-wrap">
-                {['lacZ', 'b0344', 'polymerase'].map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => { setGeneSearch(q); searchGenes(q); }}
-                    className="px-3 py-1 rounded-full text-xs bg-[#3ef2ff]/10 text-[#7dffef] border border-[#3ef2ff]/25 hover:bg-[#3ef2ff]/20 transition-colors"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </Card>
-          ) : geneLoading ? (
+          {geneError ? (
+            <Card className="p-6 text-center text-sm text-[#ff8b6e]">{geneError}</Card>
+          ) : !geneLoaded ? (
             <div className="py-8"><Spinner /></div>
           ) : genes.length === 0 ? (
-            /* Zero results — distinct from prompt state */
+            /* Nothing matched the search */
             <Card className="p-8 text-center">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.04] ring-1 ring-white/10">
                 <SearchX className="h-7 w-7 text-[#5c8494]" strokeWidth={1.5} aria-hidden="true" />
               </div>
-              <p className="text-[#8cc3d4]">No genes match &lsquo;{geneSearch}&rsquo;</p>
+              <p className="text-[#8cc3d4]">No genes match &lsquo;{geneQuery}&rsquo;</p>
               <p className="text-xs text-[#5c8494] mt-1">Try a different name, locus tag, or product keyword</p>
             </Card>
           ) : (
-            /* Results */
+            /* The list: one page at a time */
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2" ref={geneTableRef}>
                 <Card className="overflow-hidden">
-                  <div className="overflow-x-auto">
+                  {/* Dimmed while the next page loads, so the layout doesn't jump */}
+                  <div className={`overflow-x-auto transition-opacity ${geneLoading ? 'opacity-50' : ''}`}>
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-white/10 text-[#8cc3d4] text-xs">
@@ -341,7 +371,34 @@ export function KnowledgeTabs({
                         ))}
                       </tbody>
                     </table>
-                    <ResultCount>{genes.length} genes found</ResultCount>
+                  </div>
+
+                  {/* Pages: same look as the Results list */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-white/[0.06] text-xs text-[#8cc3d4]">
+                    <span>
+                      Showing {geneFirstRow.toLocaleString()}–{geneLastRow.toLocaleString()} of{' '}
+                      {geneTotal.toLocaleString()} genes
+                      {geneQuery && <> matching &lsquo;{geneQuery}&rsquo;</>}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className={PAGE_BTN}
+                        disabled={genePage === 0 || geneLoading}
+                        onClick={() => goToGenePage(genePage - 1)}
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" /> Prev
+                      </button>
+                      <span className="px-1 text-[#5c8494]">
+                        Page {(genePage + 1).toLocaleString()} of {genePageCount.toLocaleString()}
+                      </span>
+                      <button
+                        className={PAGE_BTN}
+                        disabled={genePage + 1 >= genePageCount || geneLoading}
+                        onClick={() => goToGenePage(genePage + 1)}
+                      >
+                        Next <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
                   </div>
                 </Card>
               </div>
@@ -373,14 +430,13 @@ export function KnowledgeTabs({
             This dataset (PRECISE-1K) includes classic transcription factors, sigma factors (e.g. RpoD), and global regulators (e.g. ppGpp).
           </div>
 
-          {/* Search bar */}
-          <div className="flex gap-3 mb-4">
-            <input
-              type="text"
+          {/* Filter bar — narrows the list as you type */}
+          <div className="mb-4">
+            <LibrarySearch
               value={tfSearch}
-              onChange={(e) => setTfSearch(e.target.value)}
-              placeholder="Filter transcription factors by name..."
-              className="flex-1 px-4 py-2.5 rounded-xl bg-[#01070c]/60 border border-white/10 text-[#eaffff] text-sm placeholder-[#5c8494] focus:outline-none focus:border-[#3ef2ff]/60 transition-colors"
+              onChange={setTfSearch}
+              label="Filter transcription factors"
+              placeholder="Filter transcription factors by name…"
             />
           </div>
 
