@@ -5,7 +5,6 @@ import { Spinner } from '@/components/ui/loading';
 import {
   ReferenceDetailPanel,
   DetailEmptyState,
-  ResultCount,
 } from '@/components/reference/detail-panel';
 import {
   getGeneFields,
@@ -19,8 +18,8 @@ export type KnowledgeTab = 'genes' | 'tfs' | 'pathways';
 
 const API_BASE = 'http://localhost:8000/api/v1';
 
-/** Genes shown per page, and the Prev/Next button style — both match the Results page. */
-const GENE_PAGE_SIZE = 25;
+/** Rows per page (Genes and Transcription Factors) and the Prev/Next button style — both match the Results page. */
+const PAGE_SIZE = 25;
 const PAGE_BTN =
   "inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-xl bg-white/[0.05] text-[#8cc3d4] border border-white/10 hover:bg-white/[0.08] transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
 
@@ -135,6 +134,8 @@ export function KnowledgeTabs({
   const [selectedTF, setSelectedTF] = useState<TFDetail | null>(null);
   const [tfDetailLoading, setTfDetailLoading] = useState(false);
   const [tfSearch, setTfSearch] = useState('');
+  const [tfPage, setTfPage] = useState(0);
+  const tfTableRef = useRef<HTMLDivElement | null>(null);
   const [tfGeneFilter, setTfGeneFilter] = useState('');
 
   // ── Pathways state ──
@@ -157,8 +158,8 @@ export function KnowledgeTabs({
     setGeneError(null);
 
     const params = new URLSearchParams({
-      limit: String(GENE_PAGE_SIZE),
-      offset: String(genePage * GENE_PAGE_SIZE),
+      limit: String(PAGE_SIZE),
+      offset: String(genePage * PAGE_SIZE),
     });
     if (geneQuery) params.set('search', geneQuery);
 
@@ -207,9 +208,9 @@ export function KnowledgeTabs({
     }
   };
 
-  const genePageCount = Math.max(1, Math.ceil(geneTotal / GENE_PAGE_SIZE));
-  const geneFirstRow = geneTotal === 0 ? 0 : genePage * GENE_PAGE_SIZE + 1;
-  const geneLastRow = Math.min(geneTotal, (genePage + 1) * GENE_PAGE_SIZE);
+  const genePageCount = Math.max(1, Math.ceil(geneTotal / PAGE_SIZE));
+  const geneFirstRow = geneTotal === 0 ? 0 : genePage * PAGE_SIZE + 1;
+  const geneLastRow = Math.min(geneTotal, (genePage + 1) * PAGE_SIZE);
 
   /* ─── TF loading ─────────────────────────────────── */
 
@@ -280,11 +281,40 @@ export function KnowledgeTabs({
     if (initialPathway) loadPathwayDetail(initialPathway);
   }, [initialPathway]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ─── Filtered TFs ───────────────────────────────── */
+  /* ─── Filtered TFs, one page at a time ───────────── */
+  // All TFs are already loaded, so filtering and paging happen right here in
+  // the browser — no extra requests, and it reacts instantly as you type.
 
   const filteredTFs = tfSearch
     ? tfs.filter(tf => tf.name.toLowerCase().includes(tfSearch.toLowerCase()))
     : tfs;
+
+  const tfPageCount = Math.max(1, Math.ceil(filteredTFs.length / PAGE_SIZE));
+  const tfPageRows = filteredTFs.slice(tfPage * PAGE_SIZE, (tfPage + 1) * PAGE_SIZE);
+  const tfFirstRow = filteredTFs.length === 0 ? 0 : tfPage * PAGE_SIZE + 1;
+  const tfLastRow = Math.min(filteredTFs.length, (tfPage + 1) * PAGE_SIZE);
+
+  // Typing a filter starts again from page 1
+  const onTfSearchChange = (val: string) => {
+    setTfSearch(val);
+    setTfPage(0);
+  };
+
+  // Same as Genes: bring the table top back into view when changing page
+  const goToTfPage = (next: number) => {
+    setTfPage(next);
+    const top = tfTableRef.current?.getBoundingClientRect().top;
+    if (top !== undefined && top < 80) {
+      window.scrollTo({ top: window.scrollY + top - 90, behavior: 'smooth' });
+    }
+  };
+
+  // Followed a link like ?tab=tfs&tf=FNR: jump to the page that row is on
+  useEffect(() => {
+    if (!initialTf || tfs.length === 0) return;
+    const index = tfs.findIndex(tf => tf.name.toLowerCase() === initialTf.toLowerCase());
+    if (index >= 0) setTfPage(Math.floor(index / PAGE_SIZE));
+  }, [initialTf, tfs]);
 
   /* ─── Filtered pathway reactions ─────────────────── */
 
@@ -434,7 +464,7 @@ export function KnowledgeTabs({
           <div className="mb-4">
             <LibrarySearch
               value={tfSearch}
-              onChange={setTfSearch}
+              onChange={onTfSearchChange}
               label="Filter transcription factors"
               placeholder="Filter transcription factors by name…"
             />
@@ -444,11 +474,17 @@ export function KnowledgeTabs({
             <div className="py-8"><Spinner /></div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2" ref={tfTableRef}>
                 <Card className="overflow-hidden">
-                  <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                  {filteredTFs.length === 0 ? (
+                    <p className="p-8 text-center text-sm text-[#8cc3d4]">
+                      No transcription factors match &lsquo;{tfSearch}&rsquo;
+                    </p>
+                  ) : (
+                  <>
+                  <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-[#0a1018] z-10">
+                      <thead>
                         <tr className="border-b border-white/10 text-[#8cc3d4] text-xs">
                           <th className="text-left p-3 font-medium uppercase tracking-wider">TF Name</th>
                           <th className="text-right p-3 font-medium uppercase tracking-wider">Regulated Genes</th>
@@ -456,7 +492,7 @@ export function KnowledgeTabs({
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredTFs.map((tf) => (
+                        {tfPageRows.map((tf) => (
                           <tr
                             key={tf.id}
                             onClick={() => loadTFDetail(tf.name)}
@@ -477,12 +513,26 @@ export function KnowledgeTabs({
                         ))}
                       </tbody>
                     </table>
-                    <ResultCount>
-                      {filteredTFs.length === tfs.length
-                        ? `${tfs.length} transcription factors`
-                        : `${filteredTFs.length} of ${tfs.length} transcription factors`}
-                    </ResultCount>
                   </div>
+
+                  {/* Pages: same look as Genes and the Results list */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-white/[0.06] text-xs text-[#8cc3d4]">
+                    <span>
+                      Showing {tfFirstRow}–{tfLastRow} of {filteredTFs.length.toLocaleString()} transcription factors
+                      {tfSearch && <> matching &lsquo;{tfSearch}&rsquo;</>}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button className={PAGE_BTN} disabled={tfPage === 0} onClick={() => goToTfPage(tfPage - 1)}>
+                        <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" /> Prev
+                      </button>
+                      <span className="px-1 text-[#5c8494]">Page {tfPage + 1} of {tfPageCount}</span>
+                      <button className={PAGE_BTN} disabled={tfPage + 1 >= tfPageCount} onClick={() => goToTfPage(tfPage + 1)}>
+                        Next <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                  </>
+                  )}
                 </Card>
               </div>
 
