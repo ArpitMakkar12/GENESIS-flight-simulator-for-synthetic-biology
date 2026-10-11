@@ -34,6 +34,104 @@ export function pending(label: string): DetailField {
 
 import React from "react";
 
+/* ─── Part activity: what the "Strength / role" column should say ───
+ *
+ * One number can't describe every part, so each type gets the measure that
+ * fits it. All the information comes from the part's own data (strength and
+ * annotations), so nothing is hard-coded per part:
+ *
+ *   constitutive promoter → bar, % of BBa_J23100 (the reference promoter)
+ *   inducible promoter    → "Inducible · IPTG"  (output depends on the inducer)
+ *   phage promoter        → "Needs T7 RNAP"     (silent without its polymerase)
+ *   RBS                   → bar, % of BBa_B0034 (the reference RBS)
+ *   terminator            → bar, termination efficiency (how much it stops)
+ *   CDS                   → what it encodes, e.g. "LacI · repressor"
+ *
+ * In the data, inducible and phage promoters are stored with strength 0.
+ * That 0 means "no fixed value", not "off", so it is never drawn as 0%.
+ * The list table and the detail panel both use this one helper.
+ */
+export type StrengthInfo =
+  | { kind: "value"; fraction: number; percent: number; basis: string }  // bar + %
+  | { kind: "conditional"; label: string; detail: string }               // inducible promoter
+  | { kind: "requires"; label: string; detail: string }                  // e.g. T7 promoter
+  | { kind: "encodes"; label: string; detail: string }                   // CDS
+  | { kind: "na"; reason: string };                                      // nothing recorded
+
+/** Shorter form for badges: "T7 RNA polymerase" → "T7 RNAP". */
+function shortPolymerase(text: string): string {
+  return text.replace(/RNA polymerase/i, "RNAP");
+}
+
+function str(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+export function partStrength(
+  partType: string | null | undefined,
+  strength: number | null | undefined,
+  annotations?: Record<string, unknown> | null,
+): StrengthInfo {
+  const type = (partType || "").toLowerCase();
+  const anno = annotations || {};
+  const hasValue = typeof strength === "number" && strength > 0;
+
+  // CDS: no strength; say what protein it makes and what that protein does
+  if (type === "cds") {
+    const protein = str(anno.protein);
+    const role =
+      str(anno.function) ||
+      (anno.excitation != null || anno.emission != null ? "fluorescent reporter" : "");
+    if (!protein) return { kind: "na", reason: "Protein not recorded" };
+    const light =
+      anno.excitation != null && anno.emission != null
+        ? ` (excitation ${anno.excitation} nm, emission ${anno.emission} nm)`
+        : "";
+    return {
+      kind: "encodes",
+      label: role ? `${protein} · ${role}` : protein,
+      detail: `Encodes ${protein}${role ? `, a ${role}` : ""}${light}`,
+    };
+  }
+
+  if (type === "promoter" && !hasValue) {
+    // Phage promoters are silent unless their own polymerase is present
+    const requires = str(anno.requires);
+    if (requires) {
+      return {
+        kind: "requires",
+        label: `Needs ${shortPolymerase(requires)}`,
+        detail: `Only active when ${requires} is present in the cell`,
+      };
+    }
+    // Inducible: off (or low) until the inducer is added
+    const inducer = str(anno.inducer);
+    const repressor = str(anno.repressor);
+    return {
+      kind: "conditional",
+      label: inducer ? `Inducible · ${inducer}` : "Inducible",
+      detail:
+        (inducer ? `Turned on by ${inducer}` : "Turned on by its inducer") +
+        (repressor ? `; held off by ${repressor} until then` : ""),
+    };
+  }
+
+  if (hasValue) {
+    // Terminators: prefer the measured efficiency when the data has it
+    if (type === "terminator") {
+      const eff = typeof anno.efficiency === "number" ? anno.efficiency : (strength as number);
+      return { kind: "value", fraction: eff, percent: Math.round(eff * 100), basis: "termination efficiency" };
+    }
+    const basis =
+      type === "promoter" ? "of BBa_J23100" :
+      type === "rbs" ? "of BBa_B0034" :
+      "relative strength";
+    return { kind: "value", fraction: strength as number, percent: Math.round((strength as number) * 100), basis };
+  }
+
+  return { kind: "na", reason: "Not yet characterised" };
+}
+
 /* ─── Part field config ───────────────────────────────── */
 
 interface PartData {
@@ -86,40 +184,63 @@ export function getPartFields(part: PartData): DetailField[] {
     )));
   }
 
-  // Strength — applicable to promoters, RBS, terminators; not CDS
-  if (type === "cds") {
-    fields.push(notApplicable("Strength", "Not applicable to CDS parts"));
+  // Strength / efficiency — one rule, shared with the list table
+  const strength = partStrength(part.part_type, part.strength, part.annotations);
+  if (strength.kind === "value") {
+    const label = type === "terminator" ? "Efficiency" : "Strength";
+    fields.push(populated(label, strength.fraction, () => (
+      <span>
+        <span className="font-mono-readout">{strength.percent}%</span>
+        <span className="ml-1.5 text-xs text-[#5c8494]">{strength.basis}</span>
+      </span>
+    )));
+  } else if (strength.kind === "conditional" || strength.kind === "requires") {
+    // e.g. "Inducible · IPTG" with the explanation underneath
+    fields.push(populated("Strength", strength.label, () => (
+      <span className="text-right">
+        <span className="block">{strength.label}</span>
+        <span className="block text-xs text-[#8cc3d4]">{strength.detail}</span>
+      </span>
+    )));
+  } else if (strength.kind === "encodes") {
+    fields.push(notApplicable("Strength", "Not applicable — a CDS makes a protein; its output is set by the promoter and RBS in front of it"));
   } else {
-    fields.push(
-      populated("Strength", part.strength, (v) => (
-        <span className="font-mono-readout">{(Number(v) * 100).toFixed(0)}%</span>
-      ))
-    );
+    fields.push(notApplicable("Strength", strength.reason));
   }
 
   // Protein / Product — only for CDS
   if (type === "cds") {
     const protein = part.annotations?.protein;
-    const func = part.annotations?.function;
     fields.push(populated("Protein", protein));
+    // Function: from the data, or "fluorescent reporter" for GFP / mRFP1 etc.
+    const fluor = part.annotations?.excitation != null && part.annotations?.emission != null;
+    const func = part.annotations?.function ?? (fluor ? "fluorescent reporter" : null);
     fields.push(populated("Function", func));
+    if (fluor) {
+      fields.push(populated("Light", part.annotations?.excitation, () => (
+        <span className="font-mono-readout">ex {String(part.annotations?.excitation)} / em {String(part.annotations?.emission)} nm</span>
+      )));
+    }
   } else {
     fields.push(notApplicable("Protein", `Not applicable to ${type} parts`));
   }
 
-  // Inducer / Repressor — only for promoters
+  // Inducer / Repressor — only for promoters. A promoter with a fixed
+  // strength is constitutive (no inducer); otherwise it is signal-driven.
   if (type === "promoter") {
-    const annoType = part.annotations?.type;
-    if (annoType === "constitutive") {
+    if (strength.kind === "value") {
       fields.push(notApplicable("Inducer", "Not applicable — constitutive promoter"));
       fields.push(notApplicable("Repressor", "Not applicable — constitutive promoter"));
-    } else if (annoType === "phage") {
-      const requires = part.annotations?.requires;
-      fields.push(notApplicable("Inducer", `Not applicable — requires ${requires || "phage polymerase"}`));
-      fields.push(notApplicable("Repressor", `Not applicable — requires ${requires || "phage polymerase"}`));
     } else {
-      fields.push(populated("Inducer", part.annotations?.inducer));
-      fields.push(populated("Repressor", part.annotations?.repressor));
+      const requires = part.annotations?.requires;
+      if (requires) {
+        // phage promoters (e.g. T7) need their own polymerase, not an inducer
+        fields.push(notApplicable("Inducer", `Not applicable — requires ${requires}`));
+        fields.push(notApplicable("Repressor", `Not applicable — requires ${requires}`));
+      } else {
+        fields.push(populated("Inducer", part.annotations?.inducer));
+        fields.push(populated("Repressor", part.annotations?.repressor));
+      }
     }
   }
 

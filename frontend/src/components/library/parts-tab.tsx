@@ -8,7 +8,7 @@ import {
   DetailEmptyState,
   ResultCount,
 } from '@/components/reference/detail-panel';
-import { getPartFields } from '@/components/reference/field-config';
+import { getPartFields, partStrength } from '@/components/reference/field-config';
 
 import { Blocks, LayoutGrid, CornerUpRight, CircleDot, ArrowBigRight, ArrowRightToLine, PackageOpen, Play } from "lucide-react";
 
@@ -41,6 +41,52 @@ const PART_TYPES = [
 function realSequence(seq: string | null): string | null {
   if (!seq || seq.toUpperCase() === 'N/A') return null;
   return seq;
+}
+
+/**
+ * The "Strength / role" cell. Each part type gets the measure that fits it
+ * (see partStrength in field-config.tsx); hover shows the full explanation.
+ */
+function PartActivity({ part }: { part: Part }) {
+  const s = partStrength(part.part_type, part.strength, part.annotations);
+
+  if (s.kind === 'value') {
+    return (
+      <div className="flex items-center gap-2" title={`${s.percent}% ${s.basis}`}>
+        <div className="flex-1 h-1.5 min-w-12 bg-white/[0.08] rounded-full overflow-hidden">
+          <div className="h-full bg-[#3ef2ff] rounded-full" style={{ width: `${Math.min(s.percent, 100)}%` }} />
+        </div>
+        <span className="text-xs text-[#8cc3d4] font-mono-readout w-9 text-right">{s.percent}%</span>
+      </div>
+    );
+  }
+  if (s.kind === 'conditional') {
+    // inducible promoter: output depends on the inducer, so no single number
+    return (
+      <span title={s.detail} className="inline-flex whitespace-nowrap px-2 py-0.5 text-[11px] rounded-full border border-[#9b6ff1]/35 bg-[#9b6ff1]/[0.10] text-[#c4b0ff]">
+        {s.label}
+      </span>
+    );
+  }
+  if (s.kind === 'requires') {
+    // phage promoter: silent without its own polymerase
+    return (
+      <span title={s.detail} className="inline-flex whitespace-nowrap px-2 py-0.5 text-[11px] rounded-full border border-[#ffcf66]/30 bg-[#ffcf66]/[0.08] text-[#ffdc8a]">
+        {s.label}
+      </span>
+    );
+  }
+  if (s.kind === 'encodes') {
+    // CDS: the protein it makes, then its role
+    const [protein, role] = s.label.split(' · ');
+    return (
+      <span title={s.detail} className="text-xs whitespace-nowrap">
+        <span className="text-[#eaffff]">{protein}</span>
+        {role && <span className="text-[#5c8494]"> · {role}</span>}
+      </span>
+    );
+  }
+  return <span className="text-[#5c8494] text-xs italic">{s.reason.toLowerCase()}</span>;
 }
 
 /**
@@ -149,7 +195,12 @@ export function PartsTab({ initialPart }: { initialPart?: string | null }) {
                       <th className="text-left p-3 font-medium uppercase tracking-wider">Type</th>
                       <th className="text-right p-3 font-medium uppercase tracking-wider">Length (bp)</th>
                       <th className="text-left p-3 font-medium uppercase tracking-wider">Source</th>
-                      <th className="text-left p-3 font-medium uppercase tracking-wider">Strength</th>
+                      <th
+                        className="text-left p-3 font-medium uppercase tracking-wider"
+                        title="Promoters: % of BBa_J23100 · RBS: % of BBa_B0034 · Terminators: termination efficiency · CDS: the protein it encodes"
+                      >
+                        Strength / role
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -173,16 +224,7 @@ export function PartsTab({ initialPart }: { initialPart?: string | null }) {
                           {p.source || <span className="italic">pending</span>}
                         </td>
                         <td className="p-3">
-                          {p.part_type === 'cds' ? (
-                            <span className="text-[#5c8494] text-xs italic">n/a</span>
-                          ) : p.strength != null ? (
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
-                                <div className="h-full bg-[#3ef2ff] rounded-full" style={{ width: `${Math.min(p.strength * 100, 100)}%` }} />
-                              </div>
-                              <span className="text-xs text-[#8cc3d4] font-mono-readout w-8 text-right">{(p.strength * 100).toFixed(0)}%</span>
-                            </div>
-                          ) : <span className="text-[#5c8494] text-xs italic">pending</span>}
+                          <PartActivity part={p} />
                         </td>
                       </tr>
                     ))}
