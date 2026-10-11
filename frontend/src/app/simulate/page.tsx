@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   RadialBarChart, RadialBar, Cell,
@@ -9,7 +10,7 @@ import {
 import { Card, MetricCard } from "@/components/ui/card";
 import { LaunchSequence, ErrorBanner } from "@/components/ui/loading";
 import { EnvParams, PRESETS, DEFAULT_PARAMS, shallowEqual } from "@/lib/presets";
-import { Timer, HeartPulse, Zap, FlaskConical, LoaderCircle, Play } from "lucide-react";
+import { Timer, HeartPulse, Zap, FlaskConical, LoaderCircle, Play, Library, X } from "lucide-react";
 import { GROWTH_UNIT, growthStateLabel, percentOfReference, REFERENCE_GROWTH_RATE } from "@/lib/sim-format";
 
 const API = "http://localhost:8000/api/v1";
@@ -63,6 +64,9 @@ function SimulateContent() {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [seqError, setSeqError] = useState<string | null>(null);
+  // Part sent here from the Library ("Use in a simulation"), e.g. ?part=BBa_J23100
+  const [loadedPart, setLoadedPart] = useState<string | null>(null);
+  const [partError, setPartError] = useState<string | null>(null);
 
   // Track whether params changed during an in-flight simulation
   const inflightParamsRef = useRef<EnvParams | null>(null);
@@ -87,6 +91,27 @@ function SimulateContent() {
     if (hasUrlParams) setParams(newParams);
   }, [searchParams]);
 
+  // Fill the DNA box with a part's sequence when the Library sent one
+  useEffect(() => {
+    const part = searchParams.get("part");
+    if (!part) return;
+    let cancelled = false;
+    setPartError(null);
+    fetch(`${API}/parts/${encodeURIComponent(part)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((data: { name: string; sequence: string | null }) => {
+        if (cancelled) return;
+        const seq = data.sequence && data.sequence.toUpperCase() !== "N/A" ? data.sequence : "";
+        if (!seq) { setPartError(`${data.name} has no sequence on record yet.`); return; }
+        setSequence(seq);
+        validateSequence(seq);
+        setLoadedPart(data.name);
+      })
+      .catch(() => { if (!cancelled) setPartError(`Could not load part ${part}.`); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   // ── Individual field setters — each patches ONLY its own field ──
   const setTemperature = (v: number) => setParams(p => ({ ...p, temperature: v }));
   const setPh = (v: number) => setParams(p => ({ ...p, ph: v }));
@@ -109,6 +134,7 @@ function SimulateContent() {
 
   const resetForm = () => {
     setSequence("");
+    setLoadedPart(null);
     setParams(DEFAULT_PARAMS);
     setResult(null);
     setError(null);
@@ -211,10 +237,42 @@ function SimulateContent() {
 
           {/* DNA Input */}
           <Card className="p-6">
-            <h2 className="text-lg font-semibold text-[#d9f7ff] mb-3">DNA Sequence Input</h2>
+            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+              <h2 className="text-lg font-semibold text-[#d9f7ff]">DNA Sequence Input</h2>
+              <Link
+                href="/library?tab=parts"
+                className="inline-flex items-center gap-1.5 text-xs text-[#8cc3d4] hover:text-[#7dffef] transition-colors"
+              >
+                <Library className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                Browse parts in the Library
+              </Link>
+            </div>
+
+            {/* Which Library part filled the box (cleared as soon as you edit it) */}
+            {loadedPart && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#3ef2ff]/25 bg-[#3ef2ff]/[0.06] px-3 py-1.5 text-xs text-[#8cc3d4]">
+                Loaded from the Library:
+                <Link
+                  href={`/library?tab=parts&part=${encodeURIComponent(loadedPart)}`}
+                  className="font-mono-readout text-[#7dffef] hover:underline underline-offset-2"
+                >
+                  {loadedPart}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => { setSequence(""); setLoadedPart(null); setSeqError(null); }}
+                  className="ml-auto inline-flex items-center gap-1 text-[#5c8494] hover:text-[#eaffff]"
+                  aria-label="Clear the loaded part"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" /> Clear
+                </button>
+              </div>
+            )}
+            {partError && <p className="mb-3 text-xs text-[#ff8b6e]">{partError}</p>}
+
             <textarea
               value={sequence}
-              onChange={(e) => { setSequence(e.target.value); validateSequence(e.target.value); }}
+              onChange={(e) => { setSequence(e.target.value); validateSequence(e.target.value); setLoadedPart(null); }}
               placeholder="Paste DNA sequence here (ATCG only)... Leave empty for default E. coli genes."
               className={`w-full h-40 p-4 rounded-xl bg-[#01070c]/60 border text-[#7dffef] font-mono-readout text-sm placeholder-[#5c8494] focus:outline-none resize-none transition-colors ${
                 seqError

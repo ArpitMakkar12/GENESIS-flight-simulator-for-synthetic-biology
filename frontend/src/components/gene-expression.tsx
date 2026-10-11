@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Search, X, Dna, LoaderCircle } from "lucide-react";
+import { Search, X, Dna, LoaderCircle, ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
 const API = "http://localhost:8000/api/v1";
@@ -302,8 +302,18 @@ export function GeneExpression({
                 return (
                   <tr key={g.gene_id} className="border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02]">
                     <td className="py-1.5 pr-3 whitespace-nowrap">
-                      {g.gene_name && <span className="text-[#eaffff] italic mr-2">{g.gene_name}</span>}
-                      <span className={`font-mono-readout ${g.gene_name ? "text-xs text-[#5c8494]" : "text-[#8cc3d4]"}`}>{g.gene_id}</span>
+                      {/* Opens the gene in the Library, in a new tab so this list keeps its place */}
+                      <a
+                        href={`/library?tab=genes&gene=${encodeURIComponent(g.gene_id)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Open ${g.gene_name ?? g.gene_id} in the Library (new tab)`}
+                        className="group/gene inline-flex items-baseline rounded hover:underline decoration-[#3ef2ff]/50 underline-offset-4 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#3ef2ff]/60"
+                      >
+                        {g.gene_name && <span className="text-[#eaffff] italic mr-2 group-hover/gene:text-[#7dffef]">{g.gene_name}</span>}
+                        <span className={`font-mono-readout ${g.gene_name ? "text-xs text-[#5c8494]" : "text-[#8cc3d4] group-hover/gene:text-[#7dffef]"}`}>{g.gene_id}</span>
+                        <ArrowUpRight className="ml-1 h-3 w-3 self-center text-[#5c8494] opacity-0 transition-opacity group-hover/gene:opacity-100" aria-hidden="true" />
+                      </a>
                     </td>
                     <td className="py-1.5 pr-3 whitespace-nowrap">
                       {isStub ? (

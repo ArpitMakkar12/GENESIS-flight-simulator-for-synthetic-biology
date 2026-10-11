@@ -223,7 +223,7 @@ export default function HomePage() {
             </Card>
           </Link>
 
-          <Link href="/parts">
+          <Link href="/library?tab=parts">
             <Card hover className="p-5 h-full flex flex-col">
               <div className="flex items-center gap-3 mb-2">
                 <Blocks className="h-5 w-5 text-[#7dffef]" strokeWidth={1.75} aria-hidden="true" />
@@ -236,7 +236,7 @@ export default function HomePage() {
             </Card>
           </Link>
 
-          <Link href="/knowledge">
+          <Link href="/library?tab=genes">
             <Card hover className="p-5 h-full flex flex-col">
               <div className="flex items-center gap-3 mb-2">
                 <BookOpen className="h-5 w-5 text-[#7dffef]" strokeWidth={1.75} aria-hidden="true" />
