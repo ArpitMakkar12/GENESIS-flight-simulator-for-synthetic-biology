@@ -311,23 +311,9 @@ export default function MicroscopeHero({
           </div>
         </div>
 
-        {/* ── Glass stat chips (aligned with headline left edge) ── */}
-        <div className="hidden sm:flex gap-2 mt-6 pointer-events-none">
-          <div className="px-3 py-2 rounded-[10px] bg-white/[0.06] border border-white/[0.12] backdrop-blur-[10px] text-[11px] text-[#8cc3d4]">
-            <span className="block text-[15px] font-semibold text-white">
-              {GENESIS_STATS.reactions.value}
-            </span>
-            reactions
-          </div>
-          <div className="px-3 py-2 rounded-[10px] bg-white/[0.06] border border-white/[0.12] backdrop-blur-[10px] text-[11px] text-[#8cc3d4]">
-            <span className="block text-[15px] font-semibold text-white">
-              {GENESIS_STATS.genes.value}
-            </span>
-            genes
-          </div>
-        </div>
+        {/* The model's scale is shown once, in the readout strip below
+            the hero — repeating it here as chips said it three times. */}
       </div>
     </div>
   );
 }
-
