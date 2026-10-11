@@ -1,19 +1,23 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Spinner, EmptyState } from '@/components/ui/loading';
 import {
   ReferenceDetailPanel,
   DetailEmptyState,
-  ResultCount,
 } from '@/components/reference/detail-panel';
 import { getPartFields, partStrength } from '@/components/reference/field-config';
 
-import { Blocks, LayoutGrid, CornerUpRight, CircleDot, ArrowBigRight, ArrowRightToLine, PackageOpen, Play } from "lucide-react";
+import { Blocks, LayoutGrid, CornerUpRight, CircleDot, ArrowBigRight, ArrowRightToLine, PackageOpen, Play, ChevronLeft, ChevronRight } from "lucide-react";
 import { LibrarySearch } from '@/components/library/library-search';
 
 const API_BASE = 'http://localhost:8000/api/v1';
+
+/** Parts per page, and the Prev/Next button style — the look matches every other list in the app. */
+const PAGE_SIZE = 12;
+const PAGE_BTN =
+  "inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-xl bg-white/[0.05] text-[#8cc3d4] border border-white/10 hover:bg-white/[0.08] transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
 
 interface Part {
   id: string;
@@ -101,6 +105,8 @@ export function PartsTab({ initialPart }: { initialPart?: string | null }) {
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<PartDetail | null>(null);
+  const [page, setPage] = useState(0);
+  const tableRef = useRef<HTMLDivElement | null>(null);
 
   // Reload when the type filter changes, or 300 ms after typing stops —
   // same as every other search in the app, so there is no button to press
@@ -146,6 +152,32 @@ export function PartsTab({ initialPart }: { initialPart?: string | null }) {
     !search || p.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  /* ─── Pages ──────────────────────────────────────────
+   * Part rows are taller than gene rows (badges and bars), so a smaller
+   * page keeps a whole page on screen without scrolling.
+   */
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const firstRow = filtered.length === 0 ? 0 : page * PAGE_SIZE + 1;
+  const lastRow = Math.min(filtered.length, (page + 1) * PAGE_SIZE);
+
+  // Searching or switching type starts again from page 1
+  useEffect(() => { setPage(0); }, [search, typeFilter]);
+
+  // Keep the page in range if the list shrinks underneath it
+  useEffect(() => {
+    if (page > 0 && page >= pageCount) setPage(pageCount - 1);
+  }, [page, pageCount]);
+
+  // Bring the table top back into view when changing page
+  const goToPage = (next: number) => {
+    setPage(next);
+    const top = tableRef.current?.getBoundingClientRect().top;
+    if (top !== undefined && top < 80) {
+      window.scrollTo({ top: window.scrollY + top - 90, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div>
       <p className="text-xs text-[#5c8494] mb-4">Characterized genetic parts from the iGEM Registry.</p>
@@ -181,7 +213,7 @@ export function PartsTab({ initialPart }: { initialPart?: string | null }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Table */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2" ref={tableRef}>
           <Card className="overflow-hidden">
             {loading ? (
               <div className="py-8"><Spinner /></div>
@@ -205,7 +237,7 @@ export function PartsTab({ initialPart }: { initialPart?: string | null }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((p) => (
+                    {pageRows.map((p) => (
                       <tr key={p.id} id={`part-row-${p.id}`} onClick={() => loadDetail(p.name)}
                         className={`border-b border-white/[0.06] cursor-pointer transition-colors hover:bg-white/[0.04] ${
                           selected?.id === p.id ? 'bg-[#3ef2ff]/[0.07] shadow-[inset_2px_0_0_0_#3ef2ff]' : ''
@@ -231,7 +263,23 @@ export function PartsTab({ initialPart }: { initialPart?: string | null }) {
                     ))}
                   </tbody>
                 </table>
-                <ResultCount>{filtered.length} parts</ResultCount>
+
+                {/* Pages: same look as Genes and Transcription Factors */}
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-white/[0.06] text-xs text-[#8cc3d4]">
+                  <span>
+                    Showing {firstRow}–{lastRow} of {filtered.length} parts
+                    {search && <> matching &lsquo;{search}&rsquo;</>}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button className={PAGE_BTN} disabled={page === 0} onClick={() => goToPage(page - 1)}>
+                      <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" /> Prev
+                    </button>
+                    <span className="px-1 text-[#5c8494]">Page {page + 1} of {pageCount}</span>
+                    <button className={PAGE_BTN} disabled={page + 1 >= pageCount} onClick={() => goToPage(page + 1)}>
+                      Next <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </Card>

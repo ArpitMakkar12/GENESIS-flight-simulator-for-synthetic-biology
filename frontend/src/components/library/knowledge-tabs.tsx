@@ -10,6 +10,7 @@ import {
   getGeneFields,
   getTFFields,
   getPathwayFields,
+  populated,
 } from '@/components/reference/field-config';
 import { Dna, Network, Workflow, SearchX, ChevronLeft, ChevronRight } from "lucide-react";
 import { LibrarySearch } from '@/components/library/library-search';
@@ -145,6 +146,9 @@ export function KnowledgeTabs({
   const [selectedPathway, setSelectedPathway] = useState<PathwayDetail | null>(null);
   const [pwDetailLoading, setPwDetailLoading] = useState(false);
   const [pwReactionFilter, setPwReactionFilter] = useState('');
+  const [pwSearch, setPwSearch] = useState('');
+  const [pwPage, setPwPage] = useState(0);
+  const pwTableRef = useRef<HTMLDivElement | null>(null);
 
   /* ─── Genes: one page at a time, narrowed by the search ─── */
 
@@ -315,6 +319,46 @@ export function KnowledgeTabs({
     const index = tfs.findIndex(tf => tf.name.toLowerCase() === initialTf.toLowerCase());
     if (index >= 0) setTfPage(Math.floor(index / PAGE_SIZE));
   }, [initialTf, tfs]);
+
+  /* ─── Pathways list, one page at a time ─────────── */
+  // Like TFs, the full list is already in the browser, so filter and page here.
+
+  const filteredPathways = pwSearch
+    ? pathways.filter(p => p.subsystem.toLowerCase().includes(pwSearch.toLowerCase()))
+    : pathways;
+
+  // Bars are scaled to the biggest pathway overall, so a bar means the same
+  // length on every page and while filtering
+  const pwMaxCount = Math.max(1, ...pathways.map(p => p.reaction_count));
+  // Every reaction belongs to exactly one pathway, so the sum is the model size
+  const pwTotalReactions = Math.max(1, pathways.reduce((sum, p) => sum + p.reaction_count, 0));
+
+  const pwPageCount = Math.max(1, Math.ceil(filteredPathways.length / PAGE_SIZE));
+  const pwPageRows = filteredPathways.slice(pwPage * PAGE_SIZE, (pwPage + 1) * PAGE_SIZE);
+  const pwFirstRow = filteredPathways.length === 0 ? 0 : pwPage * PAGE_SIZE + 1;
+  const pwLastRow = Math.min(filteredPathways.length, (pwPage + 1) * PAGE_SIZE);
+
+  // Typing a filter starts again from page 1
+  const onPwSearchChange = (val: string) => {
+    setPwSearch(val);
+    setPwPage(0);
+  };
+
+  // Bring the list top back into view when changing page
+  const goToPwPage = (next: number) => {
+    setPwPage(next);
+    const top = pwTableRef.current?.getBoundingClientRect().top;
+    if (top !== undefined && top < 80) {
+      window.scrollTo({ top: window.scrollY + top - 90, behavior: 'smooth' });
+    }
+  };
+
+  // Followed a link like ?tab=pathways&pathway=Citric%20Acid%20Cycle: jump to its page
+  useEffect(() => {
+    if (!initialPathway || pathways.length === 0) return;
+    const index = pathways.findIndex(p => p.subsystem.toLowerCase() === initialPathway.toLowerCase());
+    if (index >= 0) setPwPage(Math.floor(index / PAGE_SIZE));
+  }, [initialPathway, pathways]);
 
   /* ─── Filtered pathway reactions ─────────────────── */
 
@@ -627,99 +671,161 @@ export function KnowledgeTabs({
       {/* ═══════════════════════════════════════════════════ */}
       {activeTab === 'pathways' && (
         <div>
+          {/* Filter bar — same box as every other tab */}
+          <div className="mb-4">
+            <LibrarySearch
+              value={pwSearch}
+              onChange={onPwSearchChange}
+              label="Filter pathways"
+              placeholder="Filter pathways by name… (e.g. glycolysis, citric, transport)"
+            />
+          </div>
+
           {pwLoading ? (
             <div className="py-8"><Spinner /></div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-              {/* Card grid — left */}
-              <div className="lg:col-span-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {pathways.map((p) => (
-                    <div
-                      key={p.subsystem}
-                      onClick={() => loadPathwayDetail(p.subsystem)}
-                      className="cursor-pointer"
-                    >
-                      <Card
-                        hover
-                        className={`p-4 transition-all ${
-                          selectedPathway?.subsystem === p.subsystem
-                            ? 'ring-1 ring-[#3ef2ff]/40 shadow-[0_0_20px_-8px_rgba(62,242,255,0.3)]'
-                            : ''
-                        }`}
-                      >
-                        <h3 className="font-medium text-sm mb-1 text-[#eaffff]">{p.subsystem}</h3>
-                        <p className="text-2xl font-semibold text-[#3ef2ff] font-mono-readout glow-text">{p.reaction_count}</p>
-                        <p className="text-xs text-[#5c8494]">reactions</p>
-                      </Card>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 px-1 text-xs text-[#5c8494]">{pathways.length} pathways</div>
+            // Same two-thirds / one-third split as Parts, Genes and TFs
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Pathway list — left */}
+              <div className="lg:col-span-2" ref={pwTableRef}>
+                <Card className="overflow-hidden">
+                  {filteredPathways.length === 0 ? (
+                    <p className="p-8 text-center text-sm text-[#8cc3d4]">
+                      No pathways match &lsquo;{pwSearch}&rsquo;
+                    </p>
+                  ) : (
+                    <>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-white/10 text-[#8cc3d4] text-xs">
+                            <th className="text-left p-3 font-medium uppercase tracking-wider">Pathway</th>
+                            <th className="text-left p-3 font-medium uppercase tracking-wider w-[45%]">Reactions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pwPageRows.map((p) => (
+                            <tr
+                              key={p.subsystem}
+                              onClick={() => loadPathwayDetail(p.subsystem)}
+                              className={`border-b border-white/[0.06] cursor-pointer transition-colors hover:bg-white/[0.04] ${
+                                selectedPathway?.subsystem === p.subsystem ? 'bg-[#3ef2ff]/[0.07] shadow-[inset_2px_0_0_0_#3ef2ff]' : ''
+                              }`}
+                            >
+                              <td className="p-3 font-medium text-[#eaffff]">{p.subsystem}</td>
+                              <td className="p-3">
+                                {/* Bar length = size compared with the biggest pathway */}
+                                <div className="flex items-center gap-3" title={`${p.reaction_count} reactions`}>
+                                  <div className="flex-1 h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-[#3ef2ff] rounded-full"
+                                      style={{ width: `${Math.max(2, (p.reaction_count / pwMaxCount) * 100)}%` }}
+                                    />
+                                  </div>
+                                  <span className="w-10 text-right font-mono-readout text-xs text-[#8cc3d4]">
+                                    {p.reaction_count.toLocaleString()}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      {/* Pages: same look as the other tabs */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-white/[0.06] text-xs text-[#8cc3d4]">
+                        <span>
+                          Showing {pwFirstRow}–{pwLastRow} of {filteredPathways.length} pathways
+                          {pwSearch && <> matching &lsquo;{pwSearch}&rsquo;</>}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button className={PAGE_BTN} disabled={pwPage === 0} onClick={() => goToPwPage(pwPage - 1)}>
+                            <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" /> Prev
+                          </button>
+                          <span className="px-1 text-[#5c8494]">Page {pwPage + 1} of {pwPageCount}</span>
+                          <button className={PAGE_BTN} disabled={pwPage + 1 >= pwPageCount} onClick={() => goToPwPage(pwPage + 1)}>
+                            Next <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </Card>
               </div>
 
-              {/* Pathway Detail Panel — right */}
-              <div className="lg:col-span-2">
+              {/* Pathway details — right. Sticks while you scroll the list. */}
+              <div className="lg:sticky lg:top-24 lg:self-start">
                 {pwDetailLoading ? (
                   <Card className="p-8 text-center"><Spinner /></Card>
                 ) : selectedPathway ? (
                   <ReferenceDetailPanel
                     title={selectedPathway.subsystem}
-                    fields={getPathwayFields(selectedPathway)}
+                    fields={[
+                      // "Subsystem" would only repeat the title, so it is left out
+                      ...getPathwayFields(selectedPathway).filter(f => f.label !== 'Subsystem'),
+                      populated('Share of model', pwTotalReactions, () => (
+                        <span>
+                          <span className="font-mono-readout">
+                            {((selectedPathway.reaction_count / pwTotalReactions) * 100).toFixed(1)}%
+                          </span>
+                          <span className="ml-1.5 text-xs text-[#5c8494]">of {pwTotalReactions.toLocaleString()} reactions</span>
+                        </span>
+                      )),
+                    ]}
                     onClose={() => setSelectedPathway(null)}
                   >
-                    {/* Reaction list with filter */}
+                    {/* Reactions: one stacked row each, so nothing scrolls sideways */}
                     <div className="mt-4">
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center justify-between gap-2 mb-2">
                         <span className="text-xs text-[#8cc3d4]">
-                          Reactions ({filteredReactions.length})
+                          Reactions ({filteredReactions.length.toLocaleString()})
                         </span>
                         {selectedPathway.reactions.length > 10 && (
                           <input
                             type="text"
                             value={pwReactionFilter}
                             onChange={(e) => setPwReactionFilter(e.target.value)}
-                            placeholder="Filter..."
-                            className="px-2 py-1 rounded-md bg-[#01070c]/60 border border-white/10 text-[#eaffff] text-xs placeholder-[#5c8494] focus:outline-none focus:border-[#3ef2ff]/60 w-28"
+                            placeholder="Filter reactions…"
+                            aria-label="Filter reactions"
+                            className="px-2.5 py-1 rounded-lg bg-[#01070c]/60 border border-white/10 text-[#eaffff] text-xs placeholder-[#5c8494] focus:outline-none focus:border-[#3ef2ff]/60 w-36"
                           />
                         )}
                       </div>
-                      <div className="max-h-72 overflow-auto rounded-lg bg-[#01070c]/60 border border-white/[0.08]">
-                        <div className="min-w-[600px]">
-                        <table className="w-full text-xs">
-                          <thead className="sticky top-0 bg-[#070d14]">
-                            <tr className="border-b border-white/10 text-[#5c8494]">
-                              <th className="text-left p-2 font-medium whitespace-nowrap">ID</th>
-                              <th className="text-left p-2 font-medium whitespace-nowrap">Name</th>
-                              <th className="text-left p-2 font-medium whitespace-nowrap">Formula</th>
-                              <th className="text-center p-2 font-medium whitespace-nowrap">Rev?</th>
-                              <th className="text-left p-2 font-medium whitespace-nowrap">EC</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredReactions.map((r) => (
-                              <tr key={r.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
-                                <td className="p-2 font-mono-readout text-[#3ef2ff] whitespace-nowrap">{r.bigg_id}</td>
-                                <td className="p-2 text-[#8cc3d4]">
-                                  {r.name || <span className="text-[#5c8494] italic text-[10px]">Not yet catalogued</span>}
-                                </td>
-                                <td className="p-2 text-[#7dffef] font-mono-readout text-[10px] max-w-[200px]">
-                                  {r.reaction_formula ? (
-                                    <span className="break-all">{r.reaction_formula}</span>
-                                  ) : (
-                                    <span className="text-[#5c8494] italic">pending</span>
-                                  )}
-                                </td>
-                                <td className="p-2 text-center text-[#8cc3d4]">{r.is_reversible ? '⇌' : '→'}</td>
-                                <td className="p-2 font-mono-readout text-[#5c8494] whitespace-nowrap">
-                                  {r.ec_number || <span className="text-[10px] italic">pending</span>}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        </div>
-                      </div>
+                      <ul className="max-h-[26rem] overflow-y-auto rounded-lg bg-[#01070c]/60 border border-white/[0.08] divide-y divide-white/[0.05]">
+                        {filteredReactions.map((r) => (
+                          <li key={r.id} className="px-3 py-2 hover:bg-white/[0.02]">
+                            {/* line 1: ID, direction, EC number */}
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="font-mono-readout text-xs text-[#3ef2ff]">
+                                {r.bigg_id}
+                                <span
+                                  className="ml-2 text-[#8cc3d4]"
+                                  title={r.is_reversible ? 'Reversible' : 'One direction only'}
+                                >
+                                  {r.is_reversible ? '⇌' : '→'}
+                                </span>
+                              </span>
+                              {r.ec_number && (
+                                <span className="font-mono-readout text-[10px] text-[#5c8494]">EC {r.ec_number}</span>
+                              )}
+                            </div>
+                            {/* line 2: readable name */}
+                            <div className="text-xs text-[#d9f7ff] mt-0.5">
+                              {r.name || <span className="text-[#5c8494] italic">Not yet catalogued</span>}
+                            </div>
+                            {/* line 3: formula, wraps instead of scrolling */}
+                            {r.reaction_formula && (
+                              <div className="font-mono-readout text-[10px] text-[#7dffef]/80 mt-0.5 break-words">
+                                {r.reaction_formula}
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                        {filteredReactions.length === 0 && (
+                          <li className="px-3 py-4 text-center text-xs italic text-[#5c8494]">
+                            No reactions match &lsquo;{pwReactionFilter}&rsquo;
+                          </li>
+                        )}
+                      </ul>
                     </div>
                   </ReferenceDetailPanel>
                 ) : (
