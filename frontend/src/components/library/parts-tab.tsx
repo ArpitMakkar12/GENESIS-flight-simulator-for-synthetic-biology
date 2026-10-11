@@ -11,6 +11,7 @@ import {
 import { getPartFields, partStrength } from '@/components/reference/field-config';
 
 import { Blocks, LayoutGrid, CornerUpRight, CircleDot, ArrowBigRight, ArrowRightToLine, PackageOpen, Play } from "lucide-react";
+import { LibrarySearch } from '@/components/library/library-search';
 
 const API_BASE = 'http://localhost:8000/api/v1';
 
@@ -101,7 +102,12 @@ export function PartsTab({ initialPart }: { initialPart?: string | null }) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<PartDetail | null>(null);
 
-  useEffect(() => { loadParts(); }, [typeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Reload when the type filter changes, or 300 ms after typing stops —
+  // same as every other search in the app, so there is no button to press
+  useEffect(() => {
+    const t = setTimeout(() => loadParts(), search ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [typeFilter, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Opened from a link: show that part's details
   useEffect(() => {
@@ -162,20 +168,15 @@ export function PartsTab({ initialPart }: { initialPart?: string | null }) {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="flex gap-3 mb-5">
-        <input
-          type="text"
+      {/* Search — results update as you type */}
+      <div className="mb-5">
+        <LibrarySearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && loadParts()}
-          placeholder="Search parts by name..."
-          className="flex-1 px-4 py-2.5 rounded-xl bg-[#01070c]/60 border border-white/10 text-[#eaffff] text-sm placeholder-[#5c8494] focus:outline-none focus:border-[#3ef2ff]/60 transition-colors"
+          onChange={setSearch}
+          busy={loading}
+          label="Search parts"
+          placeholder="Search parts by name…"
         />
-        <button onClick={loadParts} disabled={loading}
-          className="px-5 py-2 rounded-full bg-[#3ef2ff]/15 text-[#7dffef] border border-[#3ef2ff]/40 text-sm font-medium hover:bg-[#3ef2ff]/25 transition-all disabled:opacity-50 shadow-[0_0_16px_-4px_rgba(62,242,255,0.3)]">
-          {loading ? 'Loading...' : 'Search'}
-        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
