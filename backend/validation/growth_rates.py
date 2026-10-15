@@ -35,7 +35,7 @@ from html import escape
 
 import pandas as pd
 
-from validation.engine import app_medium, apply_bounds, load_model
+from validation.engine import app_medium, apply_bounds, load_model, uptake_limit
 from validation.sources import CITATION, fetch, results_dir
 
 GROWTH = "Growth Rate (1/hr)"
@@ -304,6 +304,17 @@ def main() -> None:
         ) + " |"
         for r in cond.sort_values("measured", ascending=False).itertuples()
     )
+    uptake_rows = []
+    for carbon in sorted(cond.carbon_source.unique()):
+        limit, measured = uptake_limit(carbon)
+        if carbon == "glucose":
+            basis = "standard value; Gerosa et al. 2015 measured 9.65"
+        elif measured:
+            basis = "measured — Gerosa et al. 2015, doi:10.1016/j.cels.2015.09.008"
+        else:
+            basis = "no measurement — same carbon supply as glucose (60 C-mmol)"
+        uptake_rows.append(f"| {carbon} | {limit:.2f} | {basis} |")
+    uptake_rows = "\n".join(uptake_rows)
     head_engines = " | ".join(names[e] for e in engines)
     sep_engines = " | ".join("---" for _ in engines)
     small_n = len(cond) < 10
@@ -331,6 +342,14 @@ How to read these: **mean absolute error** is the typical miss in growth-rate un
 | Condition | Experiments | Measured (h⁻¹) | {head_engines} | Source |
 | --- | --- | --- | {sep_engines} | --- |
 {cond_rows}
+
+## Carbon uptake limits the engine used
+
+How fast the cell can take up its carbon source sets the ceiling on growth, so these inputs matter more than any other. They come from a separate study, never from the experiments above, so the check cannot grade itself.
+
+| Carbon source | Uptake limit (mmol/gDW/h) | Basis |
+| --- | --- | --- |
+{uptake_rows}
 
 ## Which experiments were used
 

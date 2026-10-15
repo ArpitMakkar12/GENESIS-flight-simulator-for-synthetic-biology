@@ -33,6 +33,7 @@ Each check writes to `validation/results/`:
 Commit the `results/` folder. The numbers are the project's evidence, and a reviewer should be able to read them without running anything.
 
 ## How each check stays honest
+**The engine's inputs come from somewhere else.** Growth on each carbon source is capped by how fast the cell can take that source up. The app uses rates measured in a separate study (Gerosa et al. 2015, listed in `simulation_runner.py`), never tuned to match PRECISE-1K. Sources nobody has measured fall back to the same carbon supply as glucose, and the growth-rate report shows which is which.
 
 **It tests the real engine, not a copy.** `engine.py` borrows the app's own `FBASolver` and `SimulationRunner`. Change the app, and the next run tests the change.
 

@@ -22,6 +22,64 @@ from app.services.fba_solver import FBASolver
 # ammonium). growth_state is reported relative to this.
 REFERENCE_GROWTH_RATE = 0.802
 
+# ── Carbon uptake limits (mmol/gDW/h) ──
+#
+# A cell's growth on a carbon source is limited mostly by how fast its
+# transporters pull that source in, and that rate differs a lot between
+# sources. So where a measurement exists, the limit is the measured rate.
+#
+# Source: Gerosa et al. 2015, Cell Systems 1(4):270-282,
+# doi:10.1016/j.cels.2015.09.008 — wild-type E. coli BW25113 (a K-12
+# strain), aerobic batch growth in minimal medium, one carbon source at a
+# time, mean of 3 biological replicates. Measured in one lab with one
+# method, so the rates are comparable with each other. Values copied from
+# the paper's physiology table as reproduced in Bhadra-Lobo 2020 (MS thesis,
+# Rutgers, doi:10.7282/t3-affb-r492, p.33); TODO: re-check against the
+# paper's own supplement once someone with journal access can open it.
+#
+# These values must never be tuned to match the validation check: that
+# check (backend/validation/growth_rates.py) uses PRECISE-1K experiments,
+# which are independent of this study.
+MEASURED_AEROBIC_UPTAKE = {
+    # Gerosa measured 9.65 ± 0.04. We keep the standard 10: it is close to
+    # what other labs measured (7.6 ± 0.2 in BW25113, Perrenoud & Sauer 2005;
+    # 8.59 ± 1.42 in MG1655, LaCroix et al. 2015), and it leaves the
+    # reference condition, and REFERENCE_GROWTH_RATE, unchanged.
+    "glucose": 10.0,
+    "fructose": 8.33,     # ± 0.29
+    "galactose": 1.97,    # ± 0.10
+    "glycerol": 10.14,    # ± 0.15
+    "acetate": 13.58,     # ± 0.33
+    "succinate": 15.90,   # ± 0.31
+}
+
+# Fallback for everything else: the same carbon supply for every source,
+# 60 C-mmol/gDW/h (= 10 mmol/gDW/h of glucose), so a 12-carbon sugar
+# (lactose) does not get twice the carbon of glucose.
+CARBON_ATOMS = {
+    "glucose": 6, "fructose": 6, "galactose": 6, "lactose": 12,
+    "glycerol": 3, "acetate": 2, "succinate": 4,
+    "xylose": 5, "arabinose": 5,
+}
+CARBON_UPTAKE_CMMOL = 60.0
+
+
+def carbon_uptake_limit(carbon_source: str, oxygen_level: str) -> float:
+    """Maximum uptake of the carbon source at 37 °C, pH 7, in mmol/gDW/h.
+
+    Measured rates are used only with oxygen, because that is how they were
+    measured: without oxygen, cells take up sugar faster and no comparable
+    measurement exists. So microaerobic and anaerobic runs, and the carbon
+    sources nobody has measured (xylose, arabinose, lactose), keep the
+    60 C-mmol rule.
+
+    Known side effect: galactose is measured as very slow (1.97), so on
+    galactose a microaerobic run can out-grow an aerobic one. The fix is a
+    measured low-oxygen galactose rate, not a guess.
+    """
+    if oxygen_level == "aerobic" and carbon_source in MEASURED_AEROBIC_UPTAKE:
+        return MEASURED_AEROBIC_UPTAKE[carbon_source]
+    return CARBON_UPTAKE_CMMOL / CARBON_ATOMS[carbon_source]
 
 class SimulationRunner:
     """Orchestrates the full BioSandbox simulation pipeline.
@@ -368,20 +426,10 @@ class SimulationRunner:
             "arabinose": "EX_arab__L_e",
         }
 
-        # Every carbon source gets the same carbon supply: 60 C-mmol/gDW/h,
-        # i.e. the standard 10 mmol/gDW/h of glucose. Without this, a 12-carbon
-        # sugar (lactose) delivers twice the carbon of glucose and out-grows it.
-        CARBON_ATOMS = {
-            "glucose": 6, "fructose": 6, "galactose": 6, "lactose": 12,
-            "glycerol": 3, "acetate": 2, "succinate": 4,
-            "xylose": 5, "arabinose": 5,
-        }
-        CARBON_UPTAKE_CMMOL = 60.0
-
         # Turn off all carbon sources first, then enable the selected one
+        uptake = carbon_uptake_limit(carbon_source, oxygen_level)
         for source, rxn_id in carbon_exchanges.items():
             if source == carbon_source:
-                uptake = CARBON_UPTAKE_CMMOL / CARBON_ATOMS[source]
                 constraints[rxn_id] = (-uptake, 1000.0)  # uptake allowed
             else:
                 constraints[rxn_id] = (0.0, 1000.0)      # no uptake
