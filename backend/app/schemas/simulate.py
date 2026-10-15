@@ -13,6 +13,8 @@ class SimulationRequest(BaseModel):
     oxygen_level: str = Field(default="aerobic", pattern="^(aerobic|microaerobic|anaerobic)$")
     carbon_source: str = Field(default="glucose")
     nitrogen_source: str = Field(default="ammonium")
+    # Genes to delete, as locus tags (e.g. ["b0903"]). Empty = ordinary run.
+    knockout_genes: list[str] = Field(default_factory=list, max_length=10)
 
 
 class GeneExpressionOut(BaseModel):
@@ -58,5 +60,6 @@ class SimulationResponse(BaseModel):
     bottlenecks: Optional[list[str]] = None
     model_versions: Optional[dict] = None
     conditions: Optional[dict] = None
+    knockout: Optional[dict] = None              # {genes, wild_type: {growth_rate, ...}} for knockout runs
     computed_at: Optional[datetime] = None
     compute_time_ms: Optional[int] = None

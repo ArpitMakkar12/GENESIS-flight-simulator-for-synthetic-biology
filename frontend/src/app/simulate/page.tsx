@@ -12,6 +12,8 @@ import { LaunchSequence, ErrorBanner } from "@/components/ui/loading";
 import { EnvParams, PRESETS, DEFAULT_PARAMS, shallowEqual } from "@/lib/presets";
 import { Timer, HeartPulse, Zap, FlaskConical, LoaderCircle, Play, Library, X } from "lucide-react";
 import { GROWTH_UNIT, growthStateLabel, percentOfReference, REFERENCE_GROWTH_RATE } from "@/lib/sim-format";
+import { KnockoutPicker } from "@/components/knockout-picker";
+import { KnockoutGene, geneLabel, percentChange } from "@/lib/knockout";
 
 const API = "http://localhost:8000/api/v1";
 
@@ -33,6 +35,8 @@ interface SimulationResult {
   bottlenecks: string[] | null;
   model_versions: Record<string, string> | null;
   compute_time_ms: number | null;
+  // Knockout runs only: deleted genes and the wild type in the same conditions
+  knockout?: { genes: string[]; wild_type: { growth_rate: number } } | null;
 }
 
 /* ─── Constants ───────────────────────────────────────────── */
@@ -67,6 +71,10 @@ function SimulateContent() {
   // Part sent here from the Library ("Use in a simulation"), e.g. ?part=BBa_J23100
   const [loadedPart, setLoadedPart] = useState<string | null>(null);
   const [partError, setPartError] = useState<string | null>(null);
+  // Genes to delete in this run (empty = ordinary run)
+  const [knockouts, setKnockouts] = useState<KnockoutGene[]>([]);
+  // The genes the shown result was run with (the picker may change after)
+  const [ranKnockouts, setRanKnockouts] = useState<KnockoutGene[]>([]);
 
   // Track whether params changed during an in-flight simulation
   const inflightParamsRef = useRef<EnvParams | null>(null);
@@ -135,6 +143,7 @@ function SimulateContent() {
   const resetForm = () => {
     setSequence("");
     setLoadedPart(null);
+    setKnockouts([]);
     setParams(DEFAULT_PARAMS);
     setResult(null);
     setError(null);
@@ -149,6 +158,7 @@ function SimulateContent() {
 
     // Snapshot the params at submission time — changing sliders during flight won't affect this request
     const submittedParams = { ...params };
+    const submittedKnockouts = [...knockouts];
     inflightParamsRef.current = submittedParams;
 
     try {
@@ -163,6 +173,7 @@ function SimulateContent() {
           oxygen_level: submittedParams.oxygen,
           carbon_source: submittedParams.carbon,
           nitrogen_source: submittedParams.nitrogen,
+          knockout_genes: submittedKnockouts.map((g) => g.locus_tag),
         }),
       });
       if (!res.ok) {
@@ -170,6 +181,7 @@ function SimulateContent() {
         throw new Error(err.detail || "Simulation failed");
       }
       setResult(await res.json());
+      setRanKnockouts(submittedKnockouts);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -291,6 +303,18 @@ function SimulateContent() {
             </div>
           </Card>
 
+          {/* Gene knockouts (z-10 so the search list opens over the cards below) */}
+          <Card className="p-6 relative z-10">
+            <h2 className="text-lg font-semibold text-[#d9f7ff] mb-1">
+              Gene Knockouts <span className="text-sm font-normal text-[#5c8494]">(optional)</span>
+            </h2>
+            <p className="text-xs text-[#5c8494] mb-3 leading-relaxed">
+              Delete genes from the metabolic model. The run also solves the normal cell (the wild type) in the same
+              conditions, so the result shows what the deletion changed. Only the ~1,500 genes with a metabolic role can be knocked out.
+            </p>
+            <KnockoutPicker value={knockouts} onChange={setKnockouts} />
+          </Card>
+
           {/* Error */}
           {error && <ErrorBanner message={error} onRetry={runSimulation} />}
 
@@ -325,6 +349,14 @@ function SimulateContent() {
                       <div className={`h-2 w-2 rounded-full ${result.growth_rate != null && result.growth_rate > 0.5 ? 'bg-[#3ef2ff] shadow-[0_0_8px_rgba(62,242,255,0.6)]' : 'bg-[#ffcf66]'}`} />
                       <span className="text-sm text-[#8cc3d4]">{growthStateLabel(statusLabel)}{percentOfReference(result.growth_rate) != null && ` · ${percentOfReference(result.growth_rate)}% of reference`}</span>
                     </div>
+                      {result.knockout && result.growth_rate != null && (
+                      <div className="mt-2 text-sm text-[#ffd2c4]">
+                        {ranKnockouts.map((g) => `Δ${geneLabel(g)}`).join(" ") || "Knockout"}
+                        {": "}
+                        <span className="font-mono-readout">{percentChange(result.knockout.wild_type.growth_rate, result.growth_rate)}</span>
+                        <span className="text-[#8cc3d4]"> vs the wild type ({result.knockout.wild_type.growth_rate.toFixed(3)} {GROWTH_UNIT})</span>
+                      </div>
+                    )}
                   </div>
                   {/* Run metadata — moved here from page footer */}
                   <div className="text-right text-xs text-[#5c8494] font-mono-readout space-y-0.5">

@@ -11,6 +11,7 @@ export interface SimIdentity {
   ph: number;
   oxygen_level: string;
   carbon_source: string;
+  knockouts?: string[] | null;  // genes deleted in this run, e.g. ["eno"]
 }
 
 /** Unit for growth rate, used everywhere (was a mix of "h⁻¹" and "hr⁻¹"). */
@@ -23,9 +24,15 @@ export function runLabel(sim: { run_number?: number | null }): string {
   return sim.run_number != null ? `#${sim.run_number}` : "";
 }
 
-/** Title built from the conditions: "Glucose · microaerobic · 37 °C · pH 7". */
+/** "Δeno ΔpfkA · " for knockout runs, "" otherwise — put in front of titles. */
+export function knockoutPrefix(sim: SimIdentity): string {
+  return sim.knockouts?.length ? `${sim.knockouts.map((g) => `Δ${g}`).join(" ")} · ` : "";
+}
+
+/** Title built from the conditions: "Glucose · microaerobic · 37 °C · pH 7",
+ *  or "Δeno · Glucose · aerobic · 37 °C · pH 7" for a knockout run. */
 export function autoTitle(sim: SimIdentity): string {
-  return `${capitalize(sim.carbon_source)} · ${sim.oxygen_level} · ${sim.temperature} °C · pH ${sim.ph}`;
+  return `${knockoutPrefix(sim)}${capitalize(sim.carbon_source)} · ${sim.oxygen_level} · ${sim.temperature} °C · pH ${sim.ph}`;
 }
 
 /** The name the user gave it, or the auto title when there is none. */
@@ -41,7 +48,7 @@ export function fullTitle(sim: SimIdentity): string {
 
 /** Short condition line for under a custom name: "37 °C · pH 7 · microaerobic · glucose". */
 export function conditionLine(sim: SimIdentity): string {
-  return `${sim.temperature} °C · pH ${sim.ph} · ${sim.oxygen_level} · ${sim.carbon_source}`;
+  return `${knockoutPrefix(sim)}${sim.temperature} °C · pH ${sim.ph} · ${sim.oxygen_level} · ${sim.carbon_source}`;
 }
 
 /** "Oct 6, 2026, 4:08 AM" — same format on every page. */

@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models.gene import Gene
 from app.models.reaction import Reaction
 from app.models.simulation import Simulation
+from app.services.essentiality_record import record_for
 
 router = APIRouter()
 
@@ -45,12 +46,28 @@ def _pathway_totals(flux_distribution: dict | None, info: dict) -> dict[str, flo
         totals[subsystem] = totals.get(subsystem, 0.0) + abs(flux)
     return {k: round(v, 3) for k, v in sorted(totals.items(), key=lambda kv: -kv[1])}
 
+# Locus tag -> gene name (b2779 -> eno), read once like the reactions above
+_gene_names: dict[str, str] | None = None
+
+
+async def _get_gene_names(db: AsyncSession) -> dict[str, str]:
+    global _gene_names
+    if _gene_names is None:
+        rows = (await db.execute(select(Gene.locus_tag, Gene.name))).all()
+        _gene_names = {tag: name for tag, name in rows if name}
+    return _gene_names
+
+
+def _knockout_labels(s: Simulation, names: dict[str, str]) -> list[str]:
+    """Names of the genes deleted in this run (["eno"]); [] for ordinary runs."""
+    tags = ((s.fba_results or {}).get("knockout") or {}).get("genes") or []
+    return [names.get(tag) or tag for tag in tags]
 
 def _iso(dt):
     return dt.isoformat() if dt else None
 
 
-def _summary(s: Simulation) -> dict:
+def _summary(s: Simulation, gene_names: dict[str, str] | None = None) -> dict:
     """Fields shared by the list rows and the detail page."""
     return {
         "id": str(s.id),
@@ -66,6 +83,8 @@ def _summary(s: Simulation) -> dict:
         "doubling_time": s.doubling_time,
         "viability_score": s.viability_score,
         "compute_time_ms": s.compute_time_ms,
+        # Genes deleted in this run, by name, e.g. ["eno"]; [] for ordinary runs
+        "knockouts": _knockout_labels(s, gene_names or {}),
         "created_at": _iso(s.created_at),
         "completed_at": _iso(s.completed_at),
     }
@@ -158,12 +177,13 @@ async def list_results(
         .limit(limit)
     )
     sims = (await db.execute(query)).scalars().all()
+    gene_names = await _get_gene_names(db)
     total = (
         await db.execute(select(func.count()).select_from(Simulation).where(*conditions))
     ).scalar_one()
 
     return {
-        "items": [_summary(s) for s in sims],
+        "items": [_summary(s, gene_names) for s in sims],
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -228,6 +248,24 @@ async def get_result(
         if (info.get(rxn) or (None, None))[1]
     }
 
+    
+    # Knockout runs: the wild type's pathway totals (for the pathway
+    # comparison), and each deleted gene's name and essentiality record
+    if fba.get("knockout"):
+        ko = fba["knockout"]
+        wild_type = dict(ko.get("wild_type") or {})
+        wild_type["pathway_fluxes"] = _pathway_totals(wild_type.pop("flux_distribution", None), info)
+        ko_names = dict((await db.execute(
+            select(Gene.locus_tag, Gene.name).where(Gene.locus_tag.in_(ko["genes"]))
+        )).all())
+        fba["knockout"] = {
+            "genes": [
+                {"locus_tag": g, "name": ko_names.get(g) or None, "record": record_for(g)}
+                for g in ko["genes"]
+            ],
+            "wild_type": wild_type,
+        }
+
     # Gene names (e.g. b0903 -> pflB) next to the locus tags
     expression = [dict(e) for e in (sim.expression_results or [])]
     tags = [e.get("gene_id") for e in expression if e.get("gene_id")]
@@ -237,7 +275,7 @@ async def get_result(
             e.setdefault("gene_name", names.get(e.get("gene_id")) or None)  # "" -> None
 
     return {
-        **_summary(sim),
+        **_summary(sim, await _get_gene_names(db)),
         "growth_state": fba.get("growth_state", sim.status),
         "solver_status": fba.get("solver_status"),
         "infeasibility_reason": fba.get("infeasibility_reason"),

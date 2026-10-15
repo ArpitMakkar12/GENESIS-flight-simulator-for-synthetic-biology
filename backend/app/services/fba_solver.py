@@ -68,17 +68,34 @@ class FBASolver:
               f"{len(self.model.metabolites)} metabolites, "
               f"{len(self.model.genes)} genes")
 
+    def gene_ids(self) -> set[str]:
+        """Locus tags of every gene in the metabolic model (e.g. 'b0903')."""
+        if self.model is None:
+            self.load_model()
+        return {g.id for g in self.model.genes}
+
     def solve(
         self,
         bounds: list[ReactionBound],
         exchange_constraints: dict[str, tuple[float, float]] | None = None,
+        knockout_genes: list[str] | None = None,
     ) -> FBAResult:
-        """Run FBA with custom bounds and return results."""
+        """Run FBA with custom bounds and return results.
+
+        knockout_genes: locus tags to delete. COBRApy reads each reaction's
+        gene rule, so a reaction stops only if no backup gene (isozyme) can
+        still run it.
+        """
         if self.model is None:
             self.load_model()
 
         # Work on a copy to avoid mutating the cached model
         model = self.model.copy()
+
+        # Gene knockouts go first: they close reactions completely, and the
+        # bounds below can only tighten, never reopen them.
+        for gene_id in knockout_genes or []:
+            model.genes.get_by_id(gene_id).knock_out()
 
         # Apply expression-derived bounds
         bounds_applied = 0

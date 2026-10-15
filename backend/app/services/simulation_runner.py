@@ -124,8 +124,16 @@ class SimulationRunner:
         nitrogen_source: str,
         gene_ids: list[str] | None = None,
         gene_sequences: list[str] | None = None,
+        knockout_genes: list[str] | None = None,
     ) -> dict:
-        """Execute the full simulation pipeline."""
+        """Execute the full simulation pipeline.
+
+        knockout_genes: locus tags to delete from the metabolic model. When
+        given, FBA is also solved once without them (the wild type, same
+        conditions, same bounds), so the result can show what the knockout
+        itself changed.
+        """
+        knockout_genes = list(dict.fromkeys(knockout_genes or []))  # drop repeats, keep order
         start_time = time.time()
 
         # ── Step 1: Resolve TF activation states ──
@@ -224,7 +232,18 @@ class SimulationRunner:
         fba_result = self.fba_solver.solve(
             bounds=bounds,
             exchange_constraints=exchange_constraints,
+            knockout_genes=knockout_genes,
         )
+
+        # Knockout runs also solve the wild type. Everything else (regulators,
+        # expression, bounds, medium) is shared, so any difference between
+        # the two is caused by the deleted genes alone.
+        wild_type = None
+        if knockout_genes:
+            wild_type = self.fba_solver.solve(
+                bounds=bounds,
+                exchange_constraints=exchange_constraints,
+            )
 
         # ── Step 7: Assemble results ──
         elapsed_ms = int((time.time() - start_time) * 1000)
@@ -247,6 +266,21 @@ class SimulationRunner:
             }
             for r in prediction_output.results
         ]
+        # A deleted gene makes no transcript, whatever the predictor said
+        if knockout_genes:
+            deleted = set(knockout_genes)
+            all_predictions = [p for p in all_predictions if p["gene_id"] not in deleted]
+            all_predictions += [
+                {
+                    "gene_id": g,
+                    "relative_expression": 0.0,
+                    "confidence": 1.0,
+                    "prediction_source": "knockout",
+                    "rbs_score": None,
+                    "reference_tpm": None,
+                }
+                for g in knockout_genes
+            ]
 
         # B9: return the top up- and down-regulated genes separately, so
         # repressed genes are not pushed out of the payload by induced ones.
@@ -288,11 +322,21 @@ class SimulationRunner:
         growth_state = self._growth_state(fba_result.status, fba_result.growth_rate)
 
         # V7: on an infeasible result, find out why. Only runs on failures.
+        #   0) The wild type grows, the knockout does not            -> knockout
         #   1) Medium alone at normal uptake, no GENESIS bounds -> fails: biological
         #   2) Medium with this T/pH applied to uptake         -> fails: environmental
         #   3) Otherwise the expression/kinetic bounds caused it -> constraint
         infeasibility_reason = None
-        if fba_result.status != "optimal" or fba_result.growth_rate < 0.01:
+        failed = fba_result.status != "optimal" or fba_result.growth_rate < 0.01
+        if failed and wild_type is not None and wild_type.status == "optimal" and wild_type.growth_rate >= 0.01:
+            # 0) The same cell grows without the deletion, so the deletion did it
+            infeasibility_reason = (
+                f"knockout: the wild type grows at {wild_type.growth_rate:.4f} hr-1 in these "
+                f"conditions, so deleting {', '.join(knockout_genes)} stopped growth — the "
+                "network has no other route for what "
+                + ("this gene does" if len(knockout_genes) == 1 else "these genes do")
+            )
+        elif failed:
             baseline = self.fba_solver.solve(
                 bounds=[], exchange_constraints=base_exchange_constraints,
             )
@@ -380,6 +424,24 @@ class SimulationRunner:
                 "cobra": self.fba_solver.cobra_version(),
             },
             "compute_time_ms": elapsed_ms,
+            # None for ordinary runs. For knockout runs: the deleted genes and
+            # the wild type solved under exactly the same conditions.
+            "knockout": None if wild_type is None else {
+                "genes": knockout_genes,
+                "wild_type": {
+                    "solver_status": wild_type.status,
+                    "growth_state": self._growth_state(wild_type.status, wild_type.growth_rate),
+                    "growth_rate": round(wild_type.growth_rate, 4),
+                    "doubling_time": (
+                        round(math.log(2) / wild_type.growth_rate, 2)
+                        if wild_type.growth_rate > 0 else None
+                    ),
+                    "flux_distribution": {
+                        rxn_id: round(flux, 6)
+                        for rxn_id, flux in wild_type.flux_distribution.items()
+                    },
+                },
+            },
             "conditions": {
                 "temperature": temperature,
                 "ph": ph,

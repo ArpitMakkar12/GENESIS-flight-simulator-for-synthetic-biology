@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api import simulate, constructs, parts, knowledge, results, export
+from app.api import simulate, constructs, parts, knowledge, results, export, knockout
 
 
 @asynccontextmanager
@@ -66,6 +66,7 @@ app.include_router(parts.router, prefix="/api/v1", tags=["Parts"])
 app.include_router(knowledge.router, prefix="/api/v1", tags=["Knowledge"])
 app.include_router(results.router, prefix="/api/v1", tags=["Results"])
 app.include_router(export.router, prefix="/api/v1", tags=["Export"])
+app.include_router(knockout.router, prefix="/api/v1", tags=["Knockout"])
 
 
 @app.get("/health")

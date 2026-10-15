@@ -20,6 +20,16 @@ def get_runner() -> SimulationRunner:
         _runner = SimulationRunner()
     return _runner
 
+def _knockout_summary(knockout: dict | None) -> dict | None:
+    """The knockout block without the wild type's full flux list.
+
+    The fluxes are saved with the run (the results page compares pathways
+    from them); the immediate response only needs the headline numbers.
+    """
+    if not knockout:
+        return None
+    wild_type = {k: v for k, v in knockout["wild_type"].items() if k != "flux_distribution"}
+    return {"genes": knockout["genes"], "wild_type": wild_type}
 
 @router.post("/simulate", response_model=SimulationResponse)
 async def run_simulation(
@@ -35,6 +45,17 @@ async def run_simulation(
     runner = get_runner()
     sim_id = uuid4()
     started_at = datetime.now(timezone.utc)
+    
+    # Knockouts must name genes in the metabolic model; anything else is a
+    # typo or a gene with no metabolic role, and is refused rather than
+    # silently ignored.
+    knockout_genes = [g.strip() for g in request.knockout_genes if g.strip()]
+    unknown = [g for g in knockout_genes if g not in runner.fba_solver.gene_ids()]
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Not in the metabolic model (iML1515), so they cannot be knocked out: {', '.join(unknown)}",
+        )
 
     try:
         result = await runner.run(
@@ -45,6 +66,7 @@ async def run_simulation(
             oxygen_level=request.oxygen_level,
             carbon_source=request.carbon_source,
             nitrogen_source=request.nitrogen_source,
+            knockout_genes=knockout_genes,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
@@ -105,6 +127,8 @@ async def run_simulation(
             "active_tfs": result.get("active_tfs", []),
             "regulator_state": result.get("regulator_state", {}),
             "tf_state_changes": result.get("tf_state_changes", {}),
+            # Only present on knockout runs (no migration needed: JSONB)
+            **({"knockout": result["knockout"]} if result.get("knockout") else {}),
         },
         flux_distribution=result.get("flux_distribution"),
         model_versions=model_versions,
@@ -142,6 +166,7 @@ async def run_simulation(
         bottlenecks=result.get("bottlenecks"),
         model_versions=model_versions,
         conditions=result.get("conditions"),
+        knockout=_knockout_summary(result.get("knockout")),
         computed_at=completed_at,
         compute_time_ms=result.get("compute_time_ms"),
     )

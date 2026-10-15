@@ -10,6 +10,8 @@ import { CopyButton } from "@/components/copy-button";
 import { FluxMap } from "@/components/flux-map";
 import { ProcessTrace } from "@/components/process-trace";
 import { GeneExpression, type GeneRow, type ExpressionSummary } from "@/components/gene-expression";
+import { KnockoutEffect } from "@/components/knockout-effect";
+import type { KnockoutBlock } from "@/lib/knockout";
 import { Pencil, Check, X } from "lucide-react";
 import { runLabel, simTitle, autoTitle, fullTitle, conditionLine, formatDateTime, formatGrowth, GROWTH_UNIT, percentOfReference, REFERENCE_CONDITION } from "@/lib/sim-format";
 
@@ -29,6 +31,7 @@ interface FbaResults {
   regulator_state?: Record<string, boolean>;
   tf_state_changes?: Record<string, string>;  // regulator -> "on" | "off"
   expression_summary?: ExpressionSummary & { genes_by_source?: Record<string, number> };
+  knockout?: KnockoutBlock;  // knockout runs only
 }
 
 interface SimulationDetail {
@@ -287,6 +290,16 @@ export default function SimulationDetailPage() {
           <h3 className="text-sm font-semibold text-red-300 mb-1">No feasible growth</h3>
           <p className="text-sm text-[#8cc3d4]">{infeasibilityReason}</p>
         </Card>
+      )}
+
+      {/* Knockout runs: what the deletion changed vs the wild type */}
+      {sim.fba_results?.knockout && (
+        <KnockoutEffect
+          knockout={sim.fba_results.knockout}
+          growthRate={sim.growth_rate}
+          pathwayFluxes={sim.fba_results.pathway_fluxes}
+          medium={`${sim.carbon_source}, ${sim.oxygen_level}`}
+        />
       )}
 
       {/* Environment: one compact row instead of a tall card next to a short one */}
