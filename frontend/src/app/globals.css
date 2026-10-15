@@ -41,9 +41,10 @@
   box-sizing: border-box;
 }
 
-html {
-  background: var(--bg-deep);
-}
+/* No background on html on purpose: the browser then paints body's
+   background across the WHOLE canvas, including anything that sticks out
+   below the page (an open dropdown, overscroll). With a background here,
+   body's gradient stopped at the bottom of body and plain black showed. */
 
 body {
   color: var(--foreground);
