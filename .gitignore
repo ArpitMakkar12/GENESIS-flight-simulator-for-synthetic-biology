@@ -61,3 +61,5 @@ _debug_*.py
 
 # Validation: downloaded source data (results/ IS committed)
 backend/validation/data/
+
+.pytest_cache/

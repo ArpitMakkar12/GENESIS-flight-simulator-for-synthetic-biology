@@ -47,14 +47,21 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y glpk-utils libglpk-dev
+          sudo apt-get install -y glpk-utils libglpk-dev libpango-1.0-0 libpangoft2-1.0-0
 
       - name: Install Python dependencies
         working-directory: ./backend
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      # iML1515 is downloaded from BiGG on first use. Cache it so every run
+      # does not depend on (or load) the BiGG server.
+      - name: Cache iML1515
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/models
+          key: iml1515-v1
 
       - name: Run migrations
         working-directory: ./backend
@@ -69,8 +76,10 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://biosandbox:biosandbox@localhost:5432/biosandbox_test
           DATABASE_URL_SYNC: postgresql://biosandbox:biosandbox@localhost:5432/biosandbox_test
           REDIS_URL: redis://localhost:6379/0
-          DEBUG: "true"
-        run: python -m pytest tests/ -v --tb=short || echo "No tests yet — skipping"
+          DEBUG: "false"   # true echoes every SQL statement into the log
+          MODEL_DIR: ${{ runner.temp }}/models
+        # No "|| echo": a failing test must fail the build
+        run: python -m pytest -v --tb=short
 
   frontend-test:
     name: Frontend Build Check
