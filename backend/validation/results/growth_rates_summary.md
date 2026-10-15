@@ -9,8 +9,8 @@
 
 | Engine | Conditions | Mean absolute error (h⁻¹) | Bias (h⁻¹) | Median predicted ÷ measured | Rank agreement (Spearman) | Linear agreement (Pearson) |
 | --- | --- | --- | --- | --- | --- | --- |
-| iML1515 only | 6 | 0.112 | 0.112 | 1.17 | 0.99 | 0.89 |
-| GENESIS (full engine) | 6 | 0.131 | 0.071 | 1.15 | 0.66 | 0.80 |
+| iML1515 only | 6 | 0.093 | 0.093 | 1.17 | 0.93 | 0.93 |
+| GENESIS (full engine) | 6 | 0.111 | 0.051 | 1.15 | 0.71 | 0.85 |
 
 How to read these: **mean absolute error** is the typical miss in growth-rate units. **Bias** above zero means the engine predicts faster growth than measured on average — expected for flux balance analysis, which assumes the cell grows as fast as its network allows. **Median ratio** is the same idea as a multiple. **Spearman** asks whether the engine puts the conditions in the right order (1 = perfect order), which matters most when only a handful of conditions are available. **Pearson** asks whether the values fall on a straight line.
 
@@ -22,7 +22,7 @@ How to read these: **mean absolute error** is the typical miss in growth-rate un
 | --- | --- | --- | --- | --- | --- |
 | glucose, 42 °C | 1 | 0.820 | 0.822 | 0.704 | doi.org/10.1093/molbev/msu209 |
 | glucose, 37 °C | 3 | 0.679 ± 0.054 | 0.822 | 0.802 | doi.org/10.1038/s41467-019-13483-w<br>doi.org/10.1093/nar/gky752<br>doi.org/10.1128/AEM.00410-17 |
-| xylose, 37 °C | 1 | 0.550 | 0.798 | 0.798 | doi.org/10.1128/AEM.00410-17 |
+| xylose, 37 °C | 1 | 0.550 | 0.680 | 0.680 | doi.org/10.1128/AEM.00410-17 |
 | fructose, 37 °C | 1 | 0.530 | 0.726 | 0.712 | doi.org/10.1093/nar/gky069 |
 | glycerol, 37 °C | 1 | 0.450 | 0.502 | 0.502 | doi.org/10.1128/AEM.00410-17 |
 | acetate, 37 °C | 2 | 0.260 ± 0.014 | 0.295 | 0.195 | doi.org/10.1093/nar/gky069<br>doi.org/10.1128/AEM.00410-17 |
@@ -37,7 +37,7 @@ How fast the cell can take up its carbon source sets the ceiling on growth, so t
 | fructose | 8.33 | measured — Gerosa et al. 2015, doi:10.1016/j.cels.2015.09.008 |
 | glucose | 10.00 | standard value; Gerosa et al. 2015 measured 9.65 |
 | glycerol | 10.14 | measured — Gerosa et al. 2015, doi:10.1016/j.cels.2015.09.008 |
-| xylose | 12.00 | no measurement — same carbon supply as glucose (60 C-mmol) |
+| xylose | 9.50 | measured — Gonzalez et al. 2017, doi:10.1016/j.ymben.2016.11.003 |
 
 ## Which experiments were used
 

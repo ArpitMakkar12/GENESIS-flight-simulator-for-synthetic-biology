@@ -35,10 +35,10 @@
 <rect x="570.1" y="119.0" width="10" height="10" rx="1.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>glucose, 37 °C — GENESIS (full engine): 0.802 per hour</title></rect>
 <path d="M510.1 117.5 L516.6 124.0 L510.1 130.5 L503.6 124.0 Z" fill="#fcfcfb" stroke="#0b0b0b" stroke-width="2"><title>glucose, 37 °C — measured: 0.679 ± 0.054 per hour (3 experiments)</title></path>
 <text x="138" y="168.0" font-size="12" fill="#0b0b0b" text-anchor="end">xylose, 37 °C</text>
-<line x1="441.5" y1="164.0" x2="572.9" y2="164.0" stroke="#2a78d6" stroke-opacity="0.35" stroke-width="2"/>
-<line x1="441.5" y1="164.0" x2="572.9" y2="164.0" stroke="#eb6834" stroke-opacity="0.35" stroke-width="2"/>
-<circle cx="572.9" cy="164.0" r="5.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>xylose, 37 °C — iML1515 only: 0.798 per hour</title></circle>
-<rect x="567.9" y="159.0" width="10" height="10" rx="1.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>xylose, 37 °C — GENESIS (full engine): 0.798 per hour</title></rect>
+<line x1="441.5" y1="164.0" x2="510.4" y2="164.0" stroke="#2a78d6" stroke-opacity="0.35" stroke-width="2"/>
+<line x1="441.5" y1="164.0" x2="510.4" y2="164.0" stroke="#eb6834" stroke-opacity="0.35" stroke-width="2"/>
+<circle cx="510.4" cy="164.0" r="5.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>xylose, 37 °C — iML1515 only: 0.680 per hour</title></circle>
+<rect x="505.4" y="159.0" width="10" height="10" rx="1.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>xylose, 37 °C — GENESIS (full engine): 0.680 per hour</title></rect>
 <path d="M441.5 157.5 L448.0 164.0 L441.5 170.5 L435.0 164.0 Z" fill="#fcfcfb" stroke="#0b0b0b" stroke-width="2"><title>xylose, 37 °C — measured: 0.550 per hour (1 experiment)</title></path>
 <text x="138" y="208.0" font-size="12" fill="#0b0b0b" text-anchor="end">fructose, 37 °C</text>
 <line x1="430.9" y1="204.0" x2="534.9" y2="204.0" stroke="#2a78d6" stroke-opacity="0.35" stroke-width="2"/>

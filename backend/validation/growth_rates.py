@@ -306,13 +306,13 @@ def main() -> None:
     )
     uptake_rows = []
     for carbon in sorted(cond.carbon_source.unique()):
-        limit, measured = uptake_limit(carbon)
-        if carbon == "glucose":
-            basis = "standard value; Gerosa et al. 2015 measured 9.65"
-        elif measured:
-            basis = "measured — Gerosa et al. 2015, doi:10.1016/j.cels.2015.09.008"
-        else:
+        limit, source = uptake_limit(carbon)
+        if source is None:
             basis = "no measurement — same carbon supply as glucose (60 C-mmol)"
+        elif carbon == "glucose":
+            basis = source
+        else:
+            basis = f"measured — {source}"
         uptake_rows.append(f"| {carbon} | {limit:.2f} | {basis} |")
     uptake_rows = "\n".join(uptake_rows)
     head_engines = " | ".join(names[e] for e in engines)

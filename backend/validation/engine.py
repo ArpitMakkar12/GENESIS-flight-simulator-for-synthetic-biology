@@ -14,6 +14,7 @@ import cobra
 from app.services.fba_solver import FBASolver
 from app.services.simulation_runner import (
     MEASURED_AEROBIC_UPTAKE,
+    UPTAKE_SOURCES,
     SimulationRunner,
     carbon_uptake_limit,
 )
@@ -38,10 +39,13 @@ def app_medium(carbon_source: str = "glucose", oxygen_level: str = "aerobic") ->
     """The exchange bounds the app applies for a carbon source and oxygen level."""
     return SimulationRunner._get_exchange_constraints(carbon_source, oxygen_level)
 
-def uptake_limit(carbon_source: str, oxygen_level: str = "aerobic") -> tuple[float, bool]:
-    """The app's carbon uptake limit (mmol/gDW/h), and whether it is a measured rate."""
+
+def uptake_limit(carbon_source: str, oxygen_level: str = "aerobic") -> tuple[float, str | None]:
+    """The app's carbon uptake limit (mmol/gDW/h), and its source if it is a measured rate."""
     measured = oxygen_level == "aerobic" and carbon_source in MEASURED_AEROBIC_UPTAKE
-    return carbon_uptake_limit(carbon_source, oxygen_level), measured
+    source = UPTAKE_SOURCES[carbon_source] if measured else None
+    return carbon_uptake_limit(carbon_source, oxygen_level), source
+
 
 def apply_bounds(model: cobra.Model, bounds: dict[str, tuple[float, float]]) -> list[str]:
     """Set reaction bounds on `model` in place; return any IDs the model lacks."""

@@ -1,7 +1,7 @@
 carbon_source,temperature,ph,n,libraries,measured,measured_sd,studies,doi,base,genesis
 glucose,42.0000,7.0000,1,1,0.8200,0.0000,42C Evolution,doi.org/10.1093/molbev/msu209,0.8218,0.7043
 glucose,37.0000,7.0000,3,9,0.6794,0.0535,ICA; Substrate-switching Evolution; yTF,doi.org/10.1038/s41467-019-13483-w; doi.org/10.1093/nar/gky752; doi.org/10.1128/AEM.00410-17,0.8218,0.8020
-xylose,37.0000,7.0000,1,1,0.5500,0.0000,Substrate-switching Evolution,doi.org/10.1128/AEM.00410-17,0.7979,0.7979
+xylose,37.0000,7.0000,1,1,0.5500,0.0000,Substrate-switching Evolution,doi.org/10.1128/AEM.00410-17,0.6800,0.6800
 fructose,37.0000,7.0000,1,2,0.5300,0.0000,Cra/Crp,doi.org/10.1093/nar/gky069,0.7262,0.7124
 glycerol,37.0000,7.0000,1,1,0.4500,0.0000,Substrate-switching Evolution,doi.org/10.1128/AEM.00410-17,0.5020,0.5020
 acetate,37.0000,7.0000,2,3,0.2600,0.0141,Cra/Crp; Substrate-switching Evolution,doi.org/10.1093/nar/gky069; doi.org/10.1128/AEM.00410-17,0.2946,0.1954

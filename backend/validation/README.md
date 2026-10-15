@@ -33,17 +33,18 @@ Each check writes to `validation/results/`:
 Commit the `results/` folder. The numbers are the project's evidence, and a reviewer should be able to read them without running anything.
 
 ## How each check stays honest
-**The engine's inputs come from somewhere else.** Growth on each carbon source is capped by how fast the cell can take that source up. The app uses rates measured in a separate study (Gerosa et al. 2015, listed in `simulation_runner.py`), never tuned to match PRECISE-1K. Sources nobody has measured fall back to the same carbon supply as glucose, and the growth-rate report shows which is which.
 
 **It tests the real engine, not a copy.** `engine.py` borrows the app's own `FBASolver` and `SimulationRunner`. Change the app, and the next run tests the change.
 
 **Essentiality uses a rich medium on purpose.** The lab measured essentiality in rich broth (LB), where cells import amino acids and nucleotides, so the genes that make them are not essential. Screening on the app's glucose medium instead more than triples the false positives (121 against 36 in development testing on iJO1366) and drops the MCC from 0.60 to 0.44 — a medium mismatch, not a model error. The check adds LB's nutrients to the app's medium and documents the list.
 
+**The engine's inputs come from somewhere else.** Growth on each carbon source is capped by how fast the cell can take that source up. The app uses rates measured in separate studies (Gerosa et al. 2015, and Gonzalez et al. 2017 for xylose, listed in `simulation_runner.py`), never tuned to match PRECISE-1K. Sources nobody has measured fall back to the same carbon supply as glucose, and the growth-rate report shows which is which.
+
 **Setup choices are stress-tested.** The essentiality report re-scores at four lethality cut-offs and re-runs at three nutrient uptake rates. If a result held only at one setting, that setting would be suspect.
 
 **Nothing is dropped silently.** The growth-rate report lists every filter rule and how many experiments it removed, from every sample in PRECISE-1K down to the ones GENESIS can represent.
 
-**Limits are stated.** More than half of the lab's essential genes are not in the metabolic model at all — mostly genes for replication, translation and cell division — so no metabolic model can predict them either way. The report gives the exact count. PRECISE-1K has no anaerobic growth rates, and every usable experiment is at pH 7, so oxygen-free growth and the pH response are both untested here; the report lists the temperatures covered.Growth on fast sugars runs high because flux balance analysis cannot predict overflow metabolism (cells pushing sugar out as acetate); the report explains this rather than patching it.
+**Limits are stated.** More than half of the lab's essential genes are not in the metabolic model at all — mostly genes for replication, translation and cell division — so no metabolic model can predict them either way. The report gives the exact count. PRECISE-1K has no anaerobic growth rates, and every usable experiment is at pH 7, so oxygen-free growth and the pH response are both untested here; the report lists the temperatures covered. Growth on fast sugars runs high because flux balance analysis cannot predict overflow metabolism (cells pushing sugar out as acetate); the report explains this rather than patching it.
 
 ## Developing without Docker
 

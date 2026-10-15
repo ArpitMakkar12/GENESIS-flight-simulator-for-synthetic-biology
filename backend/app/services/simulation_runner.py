@@ -51,7 +51,20 @@ MEASURED_AEROBIC_UPTAKE = {
     "glycerol": 10.14,    # ± 0.15
     "acetate": 13.58,     # ± 0.33
     "succinate": 15.90,   # ± 0.31
+    # Not in Gerosa. Gonzalez, Long & Antoniewicz 2017, Metab Eng 39:9-18,
+    # doi:10.1016/j.ymben.2016.11.003, Table 1: 9.5 ± 0.5, wild-type E. coli
+    # (printed "BW21135", almost certainly BW25113, the Keio parent strain
+    # the paper also uses), aerobic batch, MOPS minimal medium, 37 °C.
+    "xylose": 9.5,
 }
+
+# Where each measured rate comes from (shown in the validation report)
+UPTAKE_SOURCES = {
+    source: "Gerosa et al. 2015, doi:10.1016/j.cels.2015.09.008"
+    for source in MEASURED_AEROBIC_UPTAKE
+}
+UPTAKE_SOURCES["glucose"] = "standard value; Gerosa et al. 2015 measured 9.65"
+UPTAKE_SOURCES["xylose"] = "Gonzalez et al. 2017, doi:10.1016/j.ymben.2016.11.003"
 
 # Fallback for everything else: the same carbon supply for every source,
 # 60 C-mmol/gDW/h (= 10 mmol/gDW/h of glucose), so a 12-carbon sugar
@@ -70,7 +83,7 @@ def carbon_uptake_limit(carbon_source: str, oxygen_level: str) -> float:
     Measured rates are used only with oxygen, because that is how they were
     measured: without oxygen, cells take up sugar faster and no comparable
     measurement exists. So microaerobic and anaerobic runs, and the carbon
-    sources nobody has measured (xylose, arabinose, lactose), keep the
+    sources nobody has measured (arabinose, lactose), keep the
     60 C-mmol rule.
 
     Known side effect: galactose is measured as very slow (1.97), so on
