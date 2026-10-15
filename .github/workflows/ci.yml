@@ -82,7 +82,7 @@ jobs:
         run: python -m pytest -v --tb=short
 
   frontend-test:
-    name: Frontend Build Check
+    name: Frontend Tests and Build
     runs-on: ubuntu-latest
 
     steps:
@@ -96,6 +96,10 @@ jobs:
       - name: Install dependencies
         working-directory: ./frontend
         run: npm ci
+
+      - name: Unit tests
+        working-directory: ./frontend
+        run: npm test
 
       - name: Build check
         working-directory: ./frontend

@@ -1,0 +1,26 @@
+{
+  "about": "Real iML1515 FBA solutions (COBRApy, the app's aerobic medium and uptake limits). precursorCarbon is computed independently from the model: the carbon (C-mmol/gDW/h) that leaves the PPP sugar pool (ribose-5-P, ribulose-5-P, xylulose-5-P, erythrose-4-P, sedoheptulose-7-P) through any reaction outside the PPP itself, i.e. into nucleotides, histidine and aromatic amino acids.",
+  "scenarios": [
+    { "name": "glucose", "growth": 0.8218,
+      "fluxes": { "G6PDH2r": 2.805609, "TKT1": 0.772905, "TKT2": 0.460069, "TALA": 0.772905, "GND": 2.805609 },
+      "precursorCarbon": 5.25 },
+    { "name": "glucose, FBA3 bypass forced", "growth": 0.8218,
+      "fluxes": { "G6PDH2r": 2.805609, "TKT1": 0.772905, "TKT2": 0.460069, "TALA": -0.227095, "FBA3": 1.0, "GND": 2.805609 },
+      "precursorCarbon": 5.25 },
+    { "name": "glucose, Entner-Doudoroff forced", "growth": 0.8098,
+      "fluxes": { "G6PDH2r": 3.565104, "TKT1": 0.361764, "TKT2": 0.053477, "TALA": 0.361764, "EDA": 2.0, "GND": 1.565104 },
+      "precursorCarbon": 5.173648 },
+    { "name": "glucose, TKT2 blocked", "growth": 0.8172,
+      "fluxes": { "G6PDH2r": 1.4175, "TKT1": 0.311102, "TALA": 0.311102, "GND": 1.4175 },
+      "precursorCarbon": 5.22089 },
+    { "name": "fructose", "growth": 0.7262,
+      "fluxes": { "G6PDH2r": 1.89148, "TKT1": 0.487069, "TKT2": 0.210613, "TALA": 0.487069, "GND": 1.89148 },
+      "precursorCarbon": 4.639466 },
+    { "name": "xylose", "growth": 0.68,
+      "fluxes": { "G6PDH2r": 1.630427, "TKT1": 3.575852, "TKT2": 3.317002, "FBA3": 3.575852, "XYLK": 9.5, "GND": 1.630427 },
+      "precursorCarbon": 4.344002 },
+    { "name": "arabinose", "growth": 0.7979,
+      "fluxes": { "G6PDH2r": 2.724297, "TKT1": 4.750521, "TKT2": 4.446785, "FBA3": 4.750521, "RBK_L1": 12.0, "GND": 2.724297 },
+      "precursorCarbon": 5.097295 }
+  ]
+}

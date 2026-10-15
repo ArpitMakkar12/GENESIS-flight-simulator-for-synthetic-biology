@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useMemo } from "react";
+import { Flux, fluxReader, pos, pppCarbonFromGlycolysis, pppCarbonForPrecursors } from "@/lib/ppp-carbon";
 
 /*
  * Metabolic flux map
@@ -58,37 +59,7 @@ const SOURCE_POS: Record<Entry, [number, number]> = {
   tca: [670, 25], // straight above the TCA cycle
 };
 
-/* ─── What each arrow measures ─────────────────────────────
- * f(id) returns the flux of one reaction (0 if the backend didn't store it,
- * because it only keeps |flux| > 1e-6).
- * Positive result = arrow direction, negative = running backwards.
- */
-type Flux = (id: string) => number;
-const pos = (v: number) => Math.max(0, v);
-
-/* ─── Pentose phosphate bookkeeping (counted in carbon atoms) ──────
- * The pentose phosphate pathway has several equally good routes back to
- * glycolysis (TKT2, TALA, or the PFK_3/FBA3 bypass, or Entner–Doudoroff),
- * and the solver may pick any of them. Counting carbon atoms makes the
- * arrows come out the same whichever route the solver chose.
- *
- * Carbon going from glycolysis into PPP (C-mmol/gDW/h):
- *   G6PDH2r brings in glucose-6-P            +6 C
- *   TKT1 sends out glyceraldehyde-3-P        −3 C
- *   TKT2 sends out fructose-6-P + G3P        −9 C
- *   TALA takes in G3P, sends out F6P         −3 C (net)
- *   FBA3 sends out DHAP (bypass)             −3 C
- *   EDA sends out G3P + pyruvate (E–D path)  −6 C
- */
-const pppCarbonFromGlycolysis = (f: Flux) =>
-  6 * f("G6PDH2r") - 3 * f("TKT1") - 9 * f("TKT2") - 3 * f("TALA") - 3 * f("FBA3") - 6 * f("EDA");
-
-/* Carbon left in PPP for building blocks = what came in − what left as CO2.
- * In: from glycolysis (above) + xylose/arabinose entering directly (5 C each).
- * Out as CO2: GND (1 C each). What remains feeds nucleotides & aromatic amino acids.
- */
-const pppCarbonForPrecursors = (f: Flux) =>
-  pppCarbonFromGlycolysis(f) + 5 * (pos(f("XYLK")) + pos(f("RBK_L1"))) - pos(f("GND"));
+// Flux reader, pos() and the PPP carbon arithmetic live in lib/ppp-carbon.ts (tested there)
 
 const EDGE_DEFS: { a: string; b: string; what: string; value: (f: Flux, growth: number) => number }[] = [
   {
@@ -209,7 +180,7 @@ export function FluxMap({
   /* Arrow values from the real fluxes */
   const edges = useMemo(() => {
     const fd = fluxDistribution ?? {};
-    const f: Flux = (id) => fd[id] ?? 0;
+    const f: Flux = fluxReader(fd);
     const uptake = source ? pos(-f(source.exchange)) : 0;
 
     const list = [
