@@ -43,7 +43,7 @@ Commit the `results/` folder. The numbers are the project's evidence, and a revi
 
 **Nothing is dropped silently.** The growth-rate report lists every filter rule and how many experiments it removed, from every sample in PRECISE-1K down to the ones GENESIS can represent.
 
-**Limits are stated.** More than half of the lab's essential genes are not in the metabolic model at all — mostly genes for replication, translation and cell division — so no metabolic model can predict them either way. The report gives the exact count. PRECISE-1K has no anaerobic growth rates, and every usable experiment is at pH 7, so oxygen-free growth and the pH response are both untested here; the report lists the temperatures covered.
+**Limits are stated.** More than half of the lab's essential genes are not in the metabolic model at all — mostly genes for replication, translation and cell division — so no metabolic model can predict them either way. The report gives the exact count. PRECISE-1K has no anaerobic growth rates, and every usable experiment is at pH 7, so oxygen-free growth and the pH response are both untested here; the report lists the temperatures covered.Growth on fast sugars runs high because flux balance analysis cannot predict overflow metabolism (cells pushing sugar out as acetate); the report explains this rather than patching it.
 
 ## Developing without Docker
 
