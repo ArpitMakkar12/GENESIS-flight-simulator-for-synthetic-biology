@@ -58,3 +58,6 @@ docker-compose.override.yml
 
 # Temporary local debugging scripts
 _debug_*.py
+
+# Validation: downloaded source data (results/ IS committed)
+backend/validation/data/
