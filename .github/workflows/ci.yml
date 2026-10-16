@@ -1,4 +1,4 @@
-name: BioSandbox CI
+name: GENESIS CI
 
 on:
   push:
@@ -12,12 +12,13 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
+      # A throwaway database, created fresh for every run
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: biosandbox
-          POSTGRES_PASSWORD: biosandbox
-          POSTGRES_DB: biosandbox_test
+          POSTGRES_USER: genesis
+          POSTGRES_PASSWORD: genesis
+          POSTGRES_DB: genesis_test
         ports:
           - 5432:5432
         options: >-
@@ -66,15 +67,15 @@ jobs:
       - name: Run migrations
         working-directory: ./backend
         env:
-          DATABASE_URL_SYNC: postgresql://biosandbox:biosandbox@localhost:5432/biosandbox_test
-          DATABASE_URL: postgresql+asyncpg://biosandbox:biosandbox@localhost:5432/biosandbox_test
+          DATABASE_URL_SYNC: postgresql://genesis:genesis@localhost:5432/genesis_test
+          DATABASE_URL: postgresql+asyncpg://genesis:genesis@localhost:5432/genesis_test
         run: alembic upgrade head
 
       - name: Run backend tests
         working-directory: ./backend
         env:
-          DATABASE_URL: postgresql+asyncpg://biosandbox:biosandbox@localhost:5432/biosandbox_test
-          DATABASE_URL_SYNC: postgresql://biosandbox:biosandbox@localhost:5432/biosandbox_test
+          DATABASE_URL: postgresql+asyncpg://genesis:genesis@localhost:5432/genesis_test
+          DATABASE_URL_SYNC: postgresql://genesis:genesis@localhost:5432/genesis_test
           REDIS_URL: redis://localhost:6379/0
           DEBUG: "false"   # true echoes every SQL statement into the log
           MODEL_DIR: ${{ runner.temp }}/models

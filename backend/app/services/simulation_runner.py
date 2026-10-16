@@ -1,4 +1,4 @@
-"""Orchestrates the full BioSandbox simulation pipeline.
+"""Orchestrates the full GENESIS simulation pipeline.
 
 Pipeline: resolve TFs → predict expression → compile bounds → solve FBA → assemble results
 
@@ -95,7 +95,7 @@ def carbon_uptake_limit(carbon_source: str, oxygen_level: str) -> float:
     return CARBON_UPTAKE_CMMOL / CARBON_ATOMS[carbon_source]
 
 class SimulationRunner:
-    """Orchestrates the full BioSandbox simulation pipeline.
+    """Orchestrates the full GENESIS simulation pipeline.
 
     Pipeline: resolve TFs → predict expression → compile bounds → solve FBA → results
     """

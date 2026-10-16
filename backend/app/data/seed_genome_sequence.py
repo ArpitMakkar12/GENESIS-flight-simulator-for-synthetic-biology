@@ -9,7 +9,7 @@ Usage (inside Docker):
 from pathlib import Path
 from Bio import Entrez, SeqIO
 
-Entrez.email = "biosandbox@example.com"
+Entrez.email = "genesis@example.com"
 
 GENOME_DIR = Path("/app/data/genome")
 FASTA_PATH = GENOME_DIR / "NC_000913.3.fasta"

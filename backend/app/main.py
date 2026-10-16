@@ -1,5 +1,6 @@
+import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
@@ -11,7 +12,7 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     # Startup: warm the SAME runner the /simulate endpoint uses, so the first
     # request doesn't pay for model loading (~4-5 s otherwise).
-    print("BioSandbox API starting up...")
+    print("GENESIS API starting up...")
     try:
         import time
         t0 = time.perf_counter()
@@ -40,11 +41,11 @@ async def lifespan(app: FastAPI):
         print(f"  Warm-up failed (non-fatal, first request will be slow): {e}")
     yield
     # Shutdown: cleanup resources
-    print("BioSandbox API shutting down...")
+    print("GENESIS API shutting down...")
 
 
 app = FastAPI(
-    title="BioSandbox API",
+    title="GENESIS API",
     description="AI-powered E. coli simulation platform",
     version="0.1.0",
     lifespan=lifespan,
@@ -59,6 +60,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def time_requests(request: Request, call_next):
+    """How long the server worked on each request.
+
+    Printed to the log, and sent as a Server-Timing header, which the
+    browser shows in DevTools (Network tab -> click a request -> Timing),
+    next to the time spent on the network.
+    """
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    ms = (time.perf_counter() - t0) * 1000
+    response.headers["Server-Timing"] = f"app;dur={ms:.0f}"
+    response.headers["Timing-Allow-Origin"] = "*"   # let the frontend's origin see it
+    if request.method != "OPTIONS" and request.url.path != "/health":
+        print(f"  {request.method} {request.url.path} -> {response.status_code} in {ms:.0f} ms", flush=True)
+    return response
+
 # Register routers
 app.include_router(simulate.router, prefix="/api/v1", tags=["Simulation"])
 app.include_router(constructs.router, prefix="/api/v1", tags=["Constructs"])
@@ -71,4 +89,4 @@ app.include_router(knockout.router, prefix="/api/v1", tags=["Knockout"])
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "biosandbox-api"}
+    return {"status": "healthy", "service": "genesis-api"}

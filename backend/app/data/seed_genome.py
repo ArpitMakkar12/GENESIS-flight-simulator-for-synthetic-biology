@@ -22,7 +22,7 @@ from app.models.gene import Gene
 
 
 # NCBI requires an email
-Entrez.email = "biosandbox@example.com"
+Entrez.email = "genesis@example.com"
 ACCESSION = "NC_000913.3"  # E. coli K-12 MG1655 complete genome
 
 

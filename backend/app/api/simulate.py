@@ -36,7 +36,7 @@ async def run_simulation(
     request: SimulationRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Run a full BioSandbox simulation pipeline.
+    """Run a full GENESIS simulation pipeline.
 
     Accepts environmental parameters and returns predicted gene expression,
     metabolic flux, growth rate, and viability. Results are persisted to the

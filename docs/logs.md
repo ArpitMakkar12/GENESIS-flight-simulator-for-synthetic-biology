@@ -278,4 +278,4 @@ End of a session       git pull origin main && git push origin main
 - **Temperature validation.** Check the heat response against independent temperature–growth data.
 - **Minimal-medium essentiality.** Validate knockouts on glucose minimal medium, the condition users simulate most.
 - **Strains.** BW25113 and other laboratory strains as preset sets of gene differences from MG1655.
-- **Naming.** Remaining "BioSandbox" strings in code (API title, health check, CI name); keep the database name to avoid breaking existing volumes.
+  - **Naming.** Done: API title, health check, startup messages and CI now say GENESIS. The local database keeps the name `biosandbox`, so existing volumes keep working; the online database will be named `genesis`.
