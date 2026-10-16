@@ -15,6 +15,7 @@ from app.models.gene import Gene
 from app.models.reaction import Reaction
 from app.models.simulation import Simulation
 from app.services.essentiality_record import record_for
+from app.api.admin import require_admin
 
 router = APIRouter()
 
@@ -202,7 +203,7 @@ class BulkDeleteRequest(BaseModel):
     ids: list[UUID] = Field(..., min_length=1, max_length=500)
 
 
-@router.post("/results/bulk-delete")
+@router.post("/results/bulk-delete", dependencies=[Depends(require_admin)])
 async def bulk_delete_results(
     body: BulkDeleteRequest,
     db: AsyncSession = Depends(get_db),
@@ -387,7 +388,7 @@ class RenameRequest(BaseModel):
     name: Optional[str] = Field(default=None, max_length=120)
 
 
-@router.patch("/results/{task_id}")
+@router.patch("/results/{task_id}", dependencies=[Depends(require_admin)])
 async def rename_result(
     task_id: UUID,
     body: RenameRequest,
@@ -400,7 +401,7 @@ async def rename_result(
     return {"id": str(sim.id), "run_number": sim.run_number, "name": sim.name}
 
 
-@router.delete("/results/{task_id}", status_code=204)
+@router.delete("/results/{task_id}", status_code=204, dependencies=[Depends(require_admin)])
 async def delete_result(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),

@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-in-production"
     DEBUG: bool = True
     ALLOWED_ORIGINS: str = "http://localhost:3000"   # comma-separated
+    ADMIN_KEY: str = ""   # set online: renaming/deleting saved runs then needs it
 
     # AI Model paths
     MODEL_DIR: str = "./data/models"

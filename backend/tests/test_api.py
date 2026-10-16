@@ -92,3 +92,32 @@ def test_knockout_gene_search_only_offers_model_genes(client):
     items = res.json()["items"]
     if items:
         assert items[0]["locus_tag"] == "b0720"
+
+
+
+def test_saved_runs_are_locked_without_the_admin_key(client, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "ADMIN_KEY", "test-key")   # as on the live site
+
+    # Visitors can still run and view simulations
+    res = simulate(client)
+    assert res.status_code == 200
+    task_id = res.json()["task_id"]
+    assert client.get(f"/api/v1/results/{task_id}").status_code == 200
+
+    # ...but not rename or delete them, with no key or a wrong one
+    assert client.get("/api/v1/admin/status").json() == {"locked": True, "unlocked": False}
+    for headers in ({}, {"X-Admin-Key": "wrong"}):
+        assert client.patch(f"/api/v1/results/{task_id}", json={"name": "x"}, headers=headers).status_code == 401
+        assert client.delete(f"/api/v1/results/{task_id}", headers=headers).status_code == 401
+        assert client.post("/api/v1/results/bulk-delete", json={"ids": [task_id]}, headers=headers).status_code == 401
+
+    # The admin, with the key, can
+    key = {"X-Admin-Key": "test-key"}
+    assert client.get("/api/v1/admin/status", headers=key).json()["unlocked"] is True
+    assert client.patch(f"/api/v1/results/{task_id}", json={"name": "renamed"}, headers=key).status_code == 200
+    assert client.delete(f"/api/v1/results/{task_id}", headers=key).status_code == 204
+
+
+def test_nothing_is_locked_without_an_admin_key(client):
+    assert client.get("/api/v1/admin/status").json() == {"locked": False, "unlocked": True}
