@@ -12,7 +12,7 @@ import { getPartFields, partStrength } from '@/components/reference/field-config
 import { Blocks, LayoutGrid, CornerUpRight, CircleDot, ArrowBigRight, ArrowRightToLine, PackageOpen, Play, ChevronLeft, ChevronRight } from "lucide-react";
 import { LibrarySearch } from '@/components/library/library-search';
 
-const API_BASE = 'http://localhost:8000/api/v1';
+import { API as API_BASE } from "@/lib/api";
 
 /** Parts per page, and the Prev/Next button style — the look matches every other list in the app. */
 const PAGE_SIZE = 12;

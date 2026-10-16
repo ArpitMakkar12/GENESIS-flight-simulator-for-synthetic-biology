@@ -14,6 +14,7 @@ import {
   REFERENCE_GROWTH_RATE, REFERENCE_CONDITION,
 } from "@/lib/sim-format";
 import Link from "next/link";
+import { API } from "@/lib/api";
 
 interface SimDetail {
   id: string;
@@ -253,7 +254,7 @@ function CompareContent() {
         setLoading(true);
         const results = await Promise.all(
           ids.map(async (id) => {
-            const res = await fetch(`http://localhost:8000/api/v1/results/${id}`);
+            const res = await fetch(`${API}/results/${id}`);
             if (!res.ok) throw new Error(`Failed to fetch sim ${id}`);
             return res.json() as Promise<SimDetail>;
           })

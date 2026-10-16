@@ -15,7 +15,7 @@ import { GROWTH_UNIT, growthStateLabel, percentOfReference, REFERENCE_GROWTH_RAT
 import { KnockoutPicker } from "@/components/knockout-picker";
 import { KnockoutGene, geneLabel, percentChange } from "@/lib/knockout";
 
-const API = "http://localhost:8000/api/v1";
+import { API } from "@/lib/api";
 
 /* ─── Types ───────────────────────────────────────────────── */
 

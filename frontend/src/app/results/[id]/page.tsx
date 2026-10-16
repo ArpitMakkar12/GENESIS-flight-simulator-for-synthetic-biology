@@ -15,7 +15,7 @@ import type { KnockoutBlock } from "@/lib/knockout";
 import { Pencil, Check, X } from "lucide-react";
 import { runLabel, simTitle, autoTitle, fullTitle, conditionLine, formatDateTime, formatGrowth, GROWTH_UNIT, percentOfReference, REFERENCE_CONDITION } from "@/lib/sim-format";
 
-const API = "http://localhost:8000/api/v1";
+import { API } from "@/lib/api";
 
 type ExpressionResult = GeneRow;
 

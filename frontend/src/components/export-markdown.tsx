@@ -17,6 +17,7 @@ import {
 } from "@/lib/sim-format";
 import { keyFluxes, interpretRun, energyMode, fmtFlux, hasFluxData, FLUX_UNIT, type KeyFluxes } from "@/lib/flux-summary";
 import { pathwayDiff, fmtPathway, allOf, type PathwayRow } from "@/lib/pathway-diff";
+import { API } from "@/lib/api";
 
 interface ExpressionRow {
   gene_id: string;
@@ -115,8 +116,6 @@ export interface Report {
   markdown: string;
   filename: string; // ends in .md; the PDF uses the same name with .pdf
 }
-
-const API = "http://localhost:8000/api/v1";
 
 /** Save a Blob to the user's Downloads with the given name. */
 function saveBlob(blob: Blob, filename: string) {

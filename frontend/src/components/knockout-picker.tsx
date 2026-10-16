@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { Search, X, Plus } from "lucide-react";
 import { KnockoutGene, MAX_KNOCKOUTS, geneLabel, labLabel } from "@/lib/knockout";
 
-const API = "http://localhost:8000/api/v1";
+import { API } from "@/lib/api";
 
 export function KnockoutPicker({ value, onChange }: {
   value: KnockoutGene[];

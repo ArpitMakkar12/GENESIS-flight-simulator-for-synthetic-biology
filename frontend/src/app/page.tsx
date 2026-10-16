@@ -7,7 +7,7 @@ import { PRESETS, DEFAULT_PARAMS, GENESIS_STATS, presetToSearchParams, EnvParams
 import { Dna, FlaskConical, ChartColumn, ArrowRight } from "lucide-react";
 import { runLabel, simTitle, formatDateTime, formatGrowth, percentOfReference, growthStateLabel } from "@/lib/sim-format";
 
-const API = "http://localhost:8000/api/v1";
+import { API } from "@/lib/api";
 
 /* ─── Types ───────────────────────────────────────────────── */
 

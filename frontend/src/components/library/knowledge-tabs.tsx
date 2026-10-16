@@ -17,7 +17,7 @@ import { LibrarySearch } from '@/components/library/library-search';
 
 export type KnowledgeTab = 'genes' | 'tfs' | 'pathways';
 
-const API_BASE = 'http://localhost:8000/api/v1';
+import { API as API_BASE } from "@/lib/api";
 
 /** Rows per page (Genes and Transcription Factors) and the Prev/Next button style — both match the Results page. */
 const PAGE_SIZE = 25;

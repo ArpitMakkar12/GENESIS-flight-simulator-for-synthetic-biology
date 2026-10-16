@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Search, X, Dna, LoaderCircle, ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
-const API = "http://localhost:8000/api/v1";
+import { API } from "@/lib/api";
 const FIRST_PAGE = 10;   // rows shown before "Show more"
 const MORE_PAGE = 25;    // rows added per "Show more" click
 

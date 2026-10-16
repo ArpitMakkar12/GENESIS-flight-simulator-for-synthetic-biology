@@ -8,7 +8,7 @@ import { ChartColumn, ChevronLeft, ChevronRight, Search, Trash2, X } from "lucid
 import { runLabel, simTitle, conditionLine, formatDateTime, formatGrowth } from "@/lib/sim-format";
 import { MAX_COMPARE } from "@/lib/pathway-diff";
 
-const API = "http://localhost:8000/api/v1";
+import { API } from "@/lib/api";
 const PAGE_SIZE = 25;
 
 interface SimSummary {
