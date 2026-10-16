@@ -18,6 +18,10 @@ COPY requirements.txt requirements-ml.txt ./
 RUN pip install --no-cache-dir -r requirements.txt \
  && pip install --no-cache-dir -r requirements-ml.txt
 
+# Test tools (pytest), so "docker compose exec backend python -m pytest" always works
+COPY requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
 COPY . .
 
 EXPOSE 8000

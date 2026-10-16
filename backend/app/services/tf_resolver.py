@@ -4,15 +4,14 @@ Uses the expanded PRECISE-1K TRN data (10,783 regulations, 371 TFs)
 plus the seeded active_conditions JSONB to determine TF activation
 states from environmental parameters.
 
-Owned by: Arpit
 """
 
 from dataclasses import dataclass
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.config import settings
+from app.database import sync_engine
 
 
 @dataclass
@@ -137,7 +136,7 @@ class TFResolver:
         if self._loaded:
             return
 
-        engine = create_engine(settings.DATABASE_URL_SYNC)
+        engine = sync_engine
         with Session(engine) as session:
             rows = session.execute(
                 text("SELECT name, active_conditions FROM transcription_factors WHERE active_conditions IS NOT NULL")
@@ -170,7 +169,7 @@ class TFResolver:
         }
 
         # Get all TF names from database
-        engine = create_engine(settings.DATABASE_URL_SYNC)
+        engine = sync_engine
         with Session(engine) as session:
             all_tfs = session.execute(
                 text("SELECT name FROM transcription_factors")

@@ -1,8 +1,6 @@
 """Orchestrates the full GENESIS simulation pipeline.
 
 Pipeline: resolve TFs → predict expression → compile bounds → solve FBA → assemble results
-
-Owned by: Arpit
 """
 
 import sys
@@ -157,11 +155,10 @@ class SimulationRunner:
             # Empty sequences are deliberate — every one of these genes is
             # known, so the predictor resolves them by ID (lookup path,
             # sub-millisecond) and never reads the DNA.
-            from sqlalchemy import create_engine, text as sa_text
-            from app.config import settings as app_settings
+            from sqlalchemy import text as sa_text
+            from app.database import sync_engine
 
-            engine = create_engine(app_settings.DATABASE_URL_SYNC)
-            with engine.connect() as conn:
+            with sync_engine.connect() as conn:
                 rows = conn.execute(sa_text(
                     "SELECT DISTINCT g.locus_tag FROM genes g "
                     "JOIN enzyme_reactions er ON er.gene_id = g.id "
