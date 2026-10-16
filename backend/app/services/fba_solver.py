@@ -8,6 +8,8 @@ Owned by: Arpit
 
 import gzip
 import os
+import pickle
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -31,6 +33,10 @@ class FBAResult:
 MODEL_URL = "https://bigg.ucsd.edu/static/models/iML1515.xml.gz"
 MODEL_DIR = Path(os.environ.get("MODEL_DIR", "/app/data/models"))
 MODEL_PATH = MODEL_DIR / "iML1515.xml.gz"
+# The model as COBRApy holds it in memory, saved once with pickle. The
+# COBRApy version is in the name: a pickle is only safe to read with the
+# version that wrote it (and only one we wrote ourselves).
+FAST_COPY_PATH = MODEL_DIR / f"iML1515-cobra{cobra.__version__}.pkl"
 
 
 class FBASolver:
@@ -38,13 +44,29 @@ class FBASolver:
 
     def __init__(self):
         self.model: cobra.Model | None = None
+        self._lock = threading.Lock()                  # one solve at a time on the shared model
+        self._subsystems: dict[str, str] | None = None  # reaction -> pathway name, read once
 
     def load_model(self) -> None:
-        """Load the iML1515 SBML model into COBRApy."""
+        """Load iML1515, always from the pickled copy (made from the SBML on first use).
+
+        Why always the pickle: it loads in ~0.5 s instead of ~3 s (10x that
+        on 0.1 CPU), needs ~120 MB less memory, and every machine then solves
+        the very same model. A freshly parsed SBML and its pickle can pick
+        different, equally good flux patterns for the same input.
+        """
         if self.model is not None:
             return
+        if not FAST_COPY_PATH.exists():
+            self._save_fast_copy()
+        with open(FAST_COPY_PATH, "rb") as f:
+            self.model = pickle.load(f)
+        print(f"  iML1515 loaded: {len(self.model.reactions)} reactions, "
+              f"{len(self.model.metabolites)} metabolites, "
+              f"{len(self.model.genes)} genes")
 
-        # Download if not present
+    def _save_fast_copy(self) -> None:
+        """Download the SBML if needed, parse it once, and save the pickle."""
         if not MODEL_PATH.exists():
             MODEL_DIR.mkdir(parents=True, exist_ok=True)
             print(f"  Downloading iML1515 model...", end=" ", flush=True)
@@ -53,20 +75,19 @@ class FBASolver:
             MODEL_PATH.write_bytes(resp.content)
             print(f"{len(resp.content) / 1e6:.1f} MB")
 
-        # Load — decompress if gzipped
-        if str(MODEL_PATH).endswith(".gz"):
-            import tempfile
-            with gzip.open(MODEL_PATH, "rb") as f_in:
-                tmp = Path(tempfile.mktemp(suffix=".xml"))
-                tmp.write_bytes(f_in.read())
-                self.model = cobra.io.read_sbml_model(str(tmp))
-                tmp.unlink()
-        else:
-            self.model = cobra.io.read_sbml_model(str(MODEL_PATH))
+        print("  Parsing the SBML model once (about 3 s)...", flush=True)
+        with gzip.open(MODEL_PATH, "rb") as f_in:
+            tmp = MODEL_DIR / "iML1515.parsing.xml"
+            tmp.write_bytes(f_in.read())
+        model = cobra.io.read_sbml_model(str(tmp))
+        tmp.unlink()
 
-        print(f"  iML1515 loaded: {len(self.model.reactions)} reactions, "
-              f"{len(self.model.metabolites)} metabolites, "
-              f"{len(self.model.genes)} genes")
+        # Write to a temporary name first, so a crash never leaves half a file
+        part = FAST_COPY_PATH.with_suffix(".part")
+        with open(part, "wb") as f:
+            pickle.dump(model, f)
+        os.replace(part, FAST_COPY_PATH)
+        print(f"  Saved {FAST_COPY_PATH.name}")
 
     def gene_ids(self) -> set[str]:
         """Locus tags of every gene in the metabolic model (e.g. 'b0903')."""
@@ -89,9 +110,39 @@ class FBASolver:
         if self.model is None:
             self.load_model()
 
-        # Work on a copy to avoid mutating the cached model
-        model = self.model.copy()
+        # Every change made inside "with self.model" (bounds, knockouts) is
+        # undone when the block ends, even after an error, so the shared model
+        # is never altered. This replaces model.copy(), which took ~0.7 s of
+        # CPU and a second copy of the model in memory: 95% of each solve.
+        # The lock stops two requests from changing the shared model at once.
+        with self._lock, self.model as model:
+            return self._solve(model, bounds, exchange_constraints, knockout_genes)
 
+    def _subsystem_map(self) -> dict[str, str]:
+        """Reaction -> pathway name, read from the database once and kept."""
+        if self._subsystems is None:
+            from sqlalchemy import create_engine, text
+            from app.config import settings
+
+            engine = create_engine(settings.DATABASE_URL_SYNC)
+            with engine.connect() as conn:
+                rows = conn.execute(
+                    text("SELECT bigg_id, subsystem FROM reactions WHERE subsystem IS NOT NULL AND subsystem != ''")
+                ).fetchall()
+            engine.dispose()
+            self._subsystems = {row[0]: row[1] for row in rows}
+        return self._subsystems
+
+    @staticmethod
+    def _fresh_start(model) -> None:
+        """Make GLPK forget the last solution (reset to its standard starting basis)."""
+        try:
+            import swiglpk
+            swiglpk.glp_std_basis(model.solver.problem)
+        except (ImportError, AttributeError, TypeError):
+            pass  # a solver other than GLPK: nothing to reset
+
+    def _solve(self, model, bounds, exchange_constraints, knockout_genes) -> FBAResult:
         # Gene knockouts go first: they close reactions completely, and the
         # bounds below can only tighten, never reopen them.
         for gene_id in knockout_genes or []:
@@ -121,7 +172,11 @@ class FBASolver:
         # iML1515 uses EX_glc__D_e for glucose exchange
         # Default already set in the model
 
-        # Solve FBA
+        # Solve FBA, starting the solver from the same point every time.
+        # Often several flux patterns give the same top growth; on a shared
+        # model the solver would carry on from the previous request and pick
+        # a different one each time. Starting fresh keeps runs reproducible.
+        self._fresh_start(model)
         solution = model.optimize()
 
         if solution.status != "optimal":
@@ -140,17 +195,8 @@ class FBASolver:
         }
 
         # Identify active pathways from our DB (SBML lacks subsystem annotations)
-        from sqlalchemy import create_engine, text
-        from sqlalchemy.orm import Session
-        from app.config import settings
-
         pathway_fluxes: dict[str, float] = {}
-        engine = create_engine(settings.DATABASE_URL_SYNC)
-        with Session(engine) as session:
-            rows = session.execute(
-                text("SELECT bigg_id, subsystem FROM reactions WHERE subsystem IS NOT NULL AND subsystem != ''")
-            ).fetchall()
-            rxn_to_subsystem = {row[0]: row[1] for row in rows}
+        rxn_to_subsystem = self._subsystem_map()
 
         for rxn_id, flux in flux_dist.items():
             subsystem = rxn_to_subsystem.get(rxn_id, "")

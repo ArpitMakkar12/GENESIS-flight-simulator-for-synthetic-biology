@@ -1,0 +1,59 @@
+# Backend image for Render's free plan (512 MB RAM, 0.1 CPU).
+#
+# How it differs from backend/Dockerfile (the development image):
+#   - no PyTorch or other AI libraries (requirements-ml.txt): they alone need
+#     more than 512 MB. Known genes are unaffected; pasted novel DNA falls
+#     back to the median expression.
+#   - built from the repo root, so ai/ and contracts/ are copied in
+#     (in development, docker-compose mounts them instead)
+#   - iML1515 is downloaded and pickled at build time, so a cold start
+#     never waits on BiGG or on SBML parsing
+#   - listens on the port Render gives it ($PORT), without --reload
+#
+# Build from the repo root:
+#   docker build -f backend/Dockerfile.render -t genesis-backend .
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# GLPK: the LP solver's tools. Pango + fonts: PDF export (WeasyPrint).
+# No gcc: every package in requirements.txt ships a ready-made wheel.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    glpk-utils \
+    libexpat1 \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libharfbuzz-subset0 \
+    fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# The metabolic model, baked into the image. Done before copying the code,
+# so changing the code does not download it again.
+RUN mkdir -p /app/data/models && python -c "import urllib.request; urllib.request.urlretrieve('https://bigg.ucsd.edu/static/models/iML1515.xml.gz', '/app/data/models/iML1515.xml.gz')"
+
+COPY backend/ ./
+COPY ai/ ./ai/
+COPY contracts/ ./contracts/
+
+# Parse the SBML once now and save the pickled copy into the image, so a
+# cold start on Render loads the model in ~0.5 s instead of parsing it
+RUN python -c "from app.services.fba_solver import FBASolver; FBASolver().load_model()"
+
+# DEBUG=false: no logging of every SQL query (costly on 0.1 CPU).
+# The last three save memory: fewer malloc arenas, and one maths thread
+# (0.1 CPU gains nothing from more).
+ENV MODEL_DIR=/app/data/models \
+    PYTHONUNBUFFERED=1 \
+    DEBUG=false \
+    MALLOC_ARENA_MAX=2 \
+    OPENBLAS_NUM_THREADS=1 \
+    OMP_NUM_THREADS=1
+
+EXPOSE 8000
+
+# sh -c so $PORT is filled in; exec so uvicorn receives Render's stop signal
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

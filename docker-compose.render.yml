@@ -1,0 +1,26 @@
+# Rehearsal: run the backend the way Render's free plan will run it,
+# against your local database, before deploying anything.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.render.yml up -d --build backend-render
+#
+# It runs next to your normal backend: port 8001 instead of 8000.
+# Your development setup (docker compose up) is unchanged.
+
+services:
+  backend-render:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.render
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://biosandbox:biosandbox@db:5432/biosandbox
+      DATABASE_URL_SYNC: postgresql://biosandbox:biosandbox@db:5432/biosandbox
+      ALLOWED_ORIGINS: http://localhost:3000
+    # Render free limits
+    cpus: 0.1             # a tenth of one core
+    mem_limit: 512m       # the container is killed above 512 MB
+    memswap_limit: 512m   # no swap to hide behind
+    depends_on:
+      db:
+        condition: service_healthy

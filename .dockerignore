@@ -1,0 +1,14 @@
+# Used only by builds whose context is the repo root (backend/Dockerfile.render).
+# The development images build from ./backend and ./frontend, so they are not affected.
+.git
+.github
+frontend
+docs
+tests
+data
+backend/data
+backend/tests
+**/__pycache__
+**/*.pyc
+**/.env
+**/node_modules
