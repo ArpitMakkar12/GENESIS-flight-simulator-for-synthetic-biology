@@ -16,6 +16,7 @@ import { Pencil, Check, X } from "lucide-react";
 import { runLabel, simTitle, autoTitle, fullTitle, conditionLine, formatDateTime, formatGrowth, GROWTH_UNIT, percentOfReference, REFERENCE_CONDITION } from "@/lib/sim-format";
 
 import { API } from "@/lib/api";
+import { adminHeaders, LOCKED_MESSAGE, useAdmin } from "@/lib/admin";
 
 type ExpressionResult = GeneRow;
 
@@ -70,6 +71,7 @@ export default function SimulationDetailPage() {
   const [deleting, setDeleting] = useState<boolean>(false);
   const [confirmDelete, setConfirmDelete] = useState<boolean>(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { canEdit } = useAdmin();   // false on the live site until unlocked
   // Rename: null = not editing, otherwise the text being typed
   const [draftName, setDraftName] = useState<string | null>(null);
   const [savingName, setSavingName] = useState<boolean>(false);
@@ -106,7 +108,8 @@ export default function SimulationDetailPage() {
     try {
       setDeleting(true);
       setDeleteError(null);
-      const res = await fetch(`${API}/results/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API}/results/${id}`, { method: "DELETE", headers: adminHeaders() });
+      if (res.status === 401) throw new Error(LOCKED_MESSAGE);
       if (!res.ok) throw new Error(`Delete failed (${res.status})`);
       router.push("/results");
     } catch (err: unknown) {
@@ -122,9 +125,10 @@ export default function SimulationDetailPage() {
       setNameError(null);
       const res = await fetch(`${API}/results/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...adminHeaders() },
         body: JSON.stringify({ name: draftName }),
       });
+      if (res.status === 401) throw new Error(LOCKED_MESSAGE);
       if (!res.ok) throw new Error(res.status === 422 ? "Name is too long (120 characters max)" : `Save failed (${res.status})`);
       const data = (await res.json()) as { name: string | null };
       setSim({ ...sim, name: data.name });
@@ -173,14 +177,16 @@ export default function SimulationDetailPage() {
                 <span className="text-xl font-mono-readout text-[#5c8494]">{runLabel(sim)}</span>
               )}
               <h1 className="text-xl font-medium text-[#eaffff]">{simTitle(sim)}</h1>
-              <button
-                onClick={() => { setDraftName(sim.name ?? ""); setNameError(null); }}
-                className="p-1 text-[#5c8494] hover:text-[#7dffef] transition-colors"
-                title="Rename"
-                aria-label="Rename simulation"
-              >
-                <Pencil className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              </button>
+                {canEdit && (
+                <button
+                  onClick={() => { setDraftName(sim.name ?? ""); setNameError(null); }}
+                  className="p-1 text-[#5c8494] hover:text-[#7dffef] transition-colors"
+                  title="Rename"
+                  aria-label="Rename simulation"
+                >
+                  <Pencil className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                </button>
+              )}
             </div>
           ) : (
             <form
@@ -226,13 +232,15 @@ export default function SimulationDetailPage() {
             onExport={() => exportSimulationPdf(sim)}
             className="px-4 py-2 text-sm rounded-xl bg-white/[0.04] border border-white/[0.07] text-[#eaffff] hover:bg-white/[0.08] transition-colors"
           />
-          <button
-            onClick={() => { setDeleteError(null); setConfirmDelete(true); }}
-            disabled={deleting}
-            className="px-4 py-2 text-sm rounded-xl bg-red-900/30 border border-red-500/30 text-red-400 hover:bg-red-900/50 transition-colors disabled:opacity-50"
-          >
-            Delete
-          </button>
+            {canEdit && (
+            <button
+              onClick={() => { setDeleteError(null); setConfirmDelete(true); }}
+              disabled={deleting}
+              className="px-4 py-2 text-sm rounded-xl bg-red-900/30 border border-red-500/30 text-red-400 hover:bg-red-900/50 transition-colors disabled:opacity-50"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
 

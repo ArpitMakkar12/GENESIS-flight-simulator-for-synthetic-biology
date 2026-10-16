@@ -9,6 +9,8 @@ import { runLabel, simTitle, conditionLine, formatDateTime, formatGrowth } from 
 import { MAX_COMPARE } from "@/lib/pathway-diff";
 
 import { API } from "@/lib/api";
+import { adminHeaders, LOCKED_MESSAGE, useAdmin } from "@/lib/admin";
+import { AdminUnlock } from "@/components/admin-unlock";
 const PAGE_SIZE = 25;
 
 interface SimSummary {
@@ -48,6 +50,7 @@ export default function ResultsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { canEdit } = useAdmin();   // false on the live site until unlocked
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   // Filter dropdowns list every value ever used, not just the ones on this page
@@ -117,9 +120,10 @@ export default function ResultsPage() {
     try {
       const res = await fetch(`${API}/results/bulk-delete`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...adminHeaders() },
         body: JSON.stringify({ ids }),
       });
+      if (res.status === 401) throw new Error(LOCKED_MESSAGE);
       if (!res.ok) throw new Error(`Delete failed (${res.status})`);
       const { deleted } = (await res.json()) as { deleted: string[] };
       const gone = new Set(deleted);
@@ -187,11 +191,14 @@ export default function ResultsPage() {
     <div className="max-w-5xl page-enter pb-20">
       <div className="flex items-baseline justify-between mb-1">
         <h1 className="text-3xl font-semibold text-[#eaffff] glow-text">Simulation Results</h1>
-        <span className="text-sm text-[#5c8494]">
-          {total} {filtering ? "matching" : total === 1 ? "simulation" : "simulations"}
-        </span>
+        <div className="flex items-center gap-3">
+          <AdminUnlock />
+          <span className="text-sm text-[#5c8494]">
+            {total} {filtering ? "matching" : total === 1 ? "simulation" : "simulations"}
+          </span>
+        </div>
       </div>
-      <p className="text-sm text-[#8cc3d4] mb-6">Click a row to view full detail · Select 2–{MAX_COMPARE} to compare, or any number to delete</p>
+      <p className="text-sm text-[#8cc3d4] mb-6">Click a row to view full detail · Select 2–{MAX_COMPARE} to compare{canEdit ? ", or any number to delete" : ""}</p>
 
       {/* Search + filters */}
       <div className="flex flex-wrap gap-3 mb-4">
@@ -289,10 +296,12 @@ export default function ResultsPage() {
                     <span className={sim.viability_score > 0.5 ? "text-[#7dffef]" : "text-[#ff8b6e]"}>{(sim.viability_score * 100).toFixed(0)}%</span>
                   ) : "—"}</td>
                   <td className="p-3"><StatusBadge status={sim.status} growthRate={sim.growth_rate} /></td>
-                  <td className="p-3 text-center" onClick={(e) => { e.stopPropagation(); setDeleteConfirm([sim.id]); }}>
-                    <button className="text-[#5c8494] hover:text-[#ff5a36] transition-colors text-sm p-1" title="Delete" aria-label={`Delete ${runLabel(sim)}`}>
-                      <Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                    </button>
+                    <td className="p-3 text-center" onClick={(e) => { if (!canEdit) return; e.stopPropagation(); setDeleteConfirm([sim.id]); }}>
+                    {canEdit && (
+                      <button className="text-[#5c8494] hover:text-[#ff5a36] transition-colors text-sm p-1" title="Delete" aria-label={`Delete ${runLabel(sim)}`}>
+                        <Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
