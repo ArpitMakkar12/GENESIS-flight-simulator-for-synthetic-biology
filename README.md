@@ -7,6 +7,7 @@ GENESIS simulates how *Escherichia coli* K-12 MG1655 responds to its environment
 Every prediction is explained step by step, and the engine is checked against published experiments: it identifies essential genes with a Matthews correlation of **0.725** and predicts growth rates on six measured conditions within **0.11 h⁻¹** on average ([Validation](#validation)).
 
 [![CI](https://github.com/ArpitMakkar12/GENESIS-flight-simulator-for-synthetic-biology/actions/workflows/ci.yml/badge.svg)](https://github.com/ArpitMakkar12/GENESIS-flight-simulator-for-synthetic-biology/actions/workflows/ci.yml)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-View%20App-2563eb?style=for-the-badge&logo=railway&logoColor=white)](https://genesis-flight-simulator-for-synthe.vercel.app/)
 
 ---
 
