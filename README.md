@@ -53,7 +53,7 @@ Every prediction is explained step by step, and the engine is checked against pu
 
 1. **Regulators.** Rules for well-characterised master regulators (CRP, FNR, ArcA, RpoH, RpoS and others) decide which transcription factors are active in the chosen environment. The other regulators default to active.
 2. **Gene expression.** For each metabolic gene, the measured baseline from PRECISE-1K is shifted by its active regulators through a network of 10,783 regulatory interactions. DNA pasted on the Simulate page that matches no known gene is scored by a HyenaDNA sequence encoder and a trained expression model.
-3. **Reaction limits.** Expression levels become upper bounds on the reactions each enzyme catalyses, following the model's gene–protein–reaction rules (isozymes add up; enzyme complexes are limited by their scarcest subunit). Enzyme activity is scaled for temperature and pH, with heat collapse above 46 °C.
+3. **Reaction limits.** Expression levels become upper bounds on the reactions each enzyme catalyses, following the model's gene–protein–reaction rules (isozymes add up; enzyme complexes are limited by their scarcest subunit). Temperature and pH scale how fast the cell can take up its carbon source, with heat collapse above 46 °C.
 4. **Flux balance analysis.** The medium sets how much carbon and oxygen the cell can take up. Carbon uptake limits are measured rates from published experiments where they exist. COBRApy then solves the genome-scale model iML1515 (2,712 reactions, 1,516 genes) for maximum growth. Knocked-out genes switch off every reaction that has no backup enzyme.
 
 The result reports growth rate, doubling time, viability, the active pathways and the binding constraints. When the cell cannot grow, it says why: the medium, the temperature or pH, the expression limits, or a knockout.
@@ -76,13 +76,14 @@ A simulator is only useful if it agrees with real cells. Two checks compare GENE
 
 | Engine | Mean absolute error | Bias | Spearman | Pearson |
 | --- | --- | --- | --- | --- |
-| GENESIS (full engine) | **0.111 h⁻¹** | +0.051 h⁻¹ | 0.71 | 0.85 |
+| iML1515 only (plain FBA) | 0.093 h⁻¹ | +0.093 h⁻¹ | 0.93 | 0.93 |
+| GENESIS (full engine) | **0.109 h⁻¹** | +0.076 h⁻¹ | 0.71 | 0.85 |
 
 Carbon uptake limits come from independent studies (Gerosa et al. 2015; Gonzalez et al. 2017), never from the validation data, so the check cannot grade itself.
 
 **Known limitations, stated in the reports:**
 - Fast sugars run high. Real *E. coli* growing fast secretes part of its sugar as acetate (overflow metabolism), which flux balance analysis cannot predict. An enzyme-constrained model is the planned fix.
-- The heat penalty is the main ranking error: glucose at 42 °C is predicted below glucose at 37 °C.
+- At 37 °C the full engine returns the plain-FBA answer: expression-derived bounds do not bind for wild-type cells in these conditions. The only difference is at 42 °C, where the assumed activity curve predicts growth below 37 °C while the single measurement is higher. The added layers currently contribute explanation rather than growth-rate accuracy.
 - PRECISE-1K has no anaerobic growth rates and only pH 7 experiments, so those responses are not yet validated.
 
 Full reports, per-gene results and charts are in [`backend/validation/results/`](backend/validation/results/). The method is described in [`backend/validation/README.md`](backend/validation/README.md).
