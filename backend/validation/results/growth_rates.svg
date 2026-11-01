@@ -21,18 +21,18 @@
 <text x="415.0" y="340" font-size="12" fill="#52514e" text-anchor="middle">Growth rate (per hour)</text>
 <text x="138" y="88.0" font-size="12" fill="#0b0b0b" text-anchor="end">glucose, 42 °C</text>
 <line x1="584.6" y1="84.0" x2="585.6" y2="84.0" stroke="#2a78d6" stroke-opacity="0.35" stroke-width="2"/>
-<line x1="584.6" y1="84.0" x2="523.3" y2="84.0" stroke="#eb6834" stroke-opacity="0.35" stroke-width="2"/>
+<line x1="584.6" y1="84.0" x2="531.0" y2="84.0" stroke="#eb6834" stroke-opacity="0.35" stroke-width="2"/>
 <circle cx="585.6" cy="84.0" r="5.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>glucose, 42 °C — iML1515 only: 0.822 per hour</title></circle>
-<rect x="518.3" y="79.0" width="10" height="10" rx="1.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>glucose, 42 °C — GENESIS (full engine): 0.704 per hour</title></rect>
+<rect x="526.0" y="79.0" width="10" height="10" rx="1.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>glucose, 42 °C — GENESIS (full engine): 0.719 per hour</title></rect>
 <path d="M584.6 77.5 L591.1 84.0 L584.6 90.5 L578.1 84.0 Z" fill="#fcfcfb" stroke="#0b0b0b" stroke-width="2"><title>glucose, 42 °C — measured: 0.820 per hour (1 experiment)</title></path>
 <text x="138" y="128.0" font-size="12" fill="#0b0b0b" text-anchor="end">glucose, 37 °C</text>
 <line x1="510.1" y1="124.0" x2="585.6" y2="124.0" stroke="#2a78d6" stroke-opacity="0.35" stroke-width="2"/>
-<line x1="510.1" y1="124.0" x2="575.1" y2="124.0" stroke="#eb6834" stroke-opacity="0.35" stroke-width="2"/>
+<line x1="510.1" y1="124.0" x2="585.6" y2="124.0" stroke="#eb6834" stroke-opacity="0.35" stroke-width="2"/>
 <line x1="481.7" y1="124.0" x2="538.5" y2="124.0" stroke="#0b0b0b" stroke-width="1.5"/>
 <line x1="481.7" y1="120.0" x2="481.7" y2="128.0" stroke="#0b0b0b" stroke-width="1.5"/>
 <line x1="538.5" y1="120.0" x2="538.5" y2="128.0" stroke="#0b0b0b" stroke-width="1.5"/>
 <circle cx="585.6" cy="124.0" r="5.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>glucose, 37 °C — iML1515 only: 0.822 per hour</title></circle>
-<rect x="570.1" y="119.0" width="10" height="10" rx="1.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>glucose, 37 °C — GENESIS (full engine): 0.802 per hour</title></rect>
+<rect x="580.6" y="119.0" width="10" height="10" rx="1.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>glucose, 37 °C — GENESIS (full engine): 0.822 per hour</title></rect>
 <path d="M510.1 117.5 L516.6 124.0 L510.1 130.5 L503.6 124.0 Z" fill="#fcfcfb" stroke="#0b0b0b" stroke-width="2"><title>glucose, 37 °C — measured: 0.679 ± 0.054 per hour (3 experiments)</title></path>
 <text x="138" y="168.0" font-size="12" fill="#0b0b0b" text-anchor="end">xylose, 37 °C</text>
 <line x1="441.5" y1="164.0" x2="510.4" y2="164.0" stroke="#2a78d6" stroke-opacity="0.35" stroke-width="2"/>
@@ -42,9 +42,9 @@
 <path d="M441.5 157.5 L448.0 164.0 L441.5 170.5 L435.0 164.0 Z" fill="#fcfcfb" stroke="#0b0b0b" stroke-width="2"><title>xylose, 37 °C — measured: 0.550 per hour (1 experiment)</title></path>
 <text x="138" y="208.0" font-size="12" fill="#0b0b0b" text-anchor="end">fructose, 37 °C</text>
 <line x1="430.9" y1="204.0" x2="534.9" y2="204.0" stroke="#2a78d6" stroke-opacity="0.35" stroke-width="2"/>
-<line x1="430.9" y1="204.0" x2="527.6" y2="204.0" stroke="#eb6834" stroke-opacity="0.35" stroke-width="2"/>
+<line x1="430.9" y1="204.0" x2="534.9" y2="204.0" stroke="#eb6834" stroke-opacity="0.35" stroke-width="2"/>
 <circle cx="534.9" cy="204.0" r="5.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>fructose, 37 °C — iML1515 only: 0.726 per hour</title></circle>
-<rect x="522.6" y="199.0" width="10" height="10" rx="1.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>fructose, 37 °C — GENESIS (full engine): 0.712 per hour</title></rect>
+<rect x="529.9" y="199.0" width="10" height="10" rx="1.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>fructose, 37 °C — GENESIS (full engine): 0.726 per hour</title></rect>
 <path d="M430.9 197.5 L437.4 204.0 L430.9 210.5 L424.4 204.0 Z" fill="#fcfcfb" stroke="#0b0b0b" stroke-width="2"><title>fructose, 37 °C — measured: 0.530 per hour (1 experiment)</title></path>
 <text x="138" y="248.0" font-size="12" fill="#0b0b0b" text-anchor="end">glycerol, 37 °C</text>
 <line x1="388.5" y1="244.0" x2="416.1" y2="244.0" stroke="#2a78d6" stroke-opacity="0.35" stroke-width="2"/>
@@ -54,11 +54,11 @@
 <path d="M388.5 237.5 L395.0 244.0 L388.5 250.5 L382.0 244.0 Z" fill="#fcfcfb" stroke="#0b0b0b" stroke-width="2"><title>glycerol, 37 °C — measured: 0.450 per hour (1 experiment)</title></path>
 <text x="138" y="288.0" font-size="12" fill="#0b0b0b" text-anchor="end">acetate, 37 °C</text>
 <line x1="287.8" y1="284.0" x2="306.1" y2="284.0" stroke="#2a78d6" stroke-opacity="0.35" stroke-width="2"/>
-<line x1="287.8" y1="284.0" x2="253.6" y2="284.0" stroke="#eb6834" stroke-opacity="0.35" stroke-width="2"/>
+<line x1="287.8" y1="284.0" x2="306.1" y2="284.0" stroke="#eb6834" stroke-opacity="0.35" stroke-width="2"/>
 <line x1="280.3" y1="284.0" x2="295.3" y2="284.0" stroke="#0b0b0b" stroke-width="1.5"/>
 <line x1="280.3" y1="280.0" x2="280.3" y2="288.0" stroke="#0b0b0b" stroke-width="1.5"/>
 <line x1="295.3" y1="280.0" x2="295.3" y2="288.0" stroke="#0b0b0b" stroke-width="1.5"/>
 <circle cx="306.1" cy="284.0" r="5.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>acetate, 37 °C — iML1515 only: 0.295 per hour</title></circle>
-<rect x="248.6" y="279.0" width="10" height="10" rx="1.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>acetate, 37 °C — GENESIS (full engine): 0.195 per hour</title></rect>
+<rect x="301.1" y="279.0" width="10" height="10" rx="1.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"><title>acetate, 37 °C — GENESIS (full engine): 0.295 per hour</title></rect>
 <path d="M287.8 277.5 L294.3 284.0 L287.8 290.5 L281.3 284.0 Z" fill="#fcfcfb" stroke="#0b0b0b" stroke-width="2"><title>acetate, 37 °C — measured: 0.260 ± 0.014 per hour (2 experiments)</title></path>
 </svg>

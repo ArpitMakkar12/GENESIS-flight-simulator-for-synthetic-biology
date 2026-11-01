@@ -322,7 +322,7 @@ class SimulationRunner:
         #   0) The wild type grows, the knockout does not            -> knockout
         #   1) Medium alone at normal uptake, no GENESIS bounds -> fails: biological
         #   2) Medium with this T/pH applied to uptake         -> fails: environmental
-        #   3) Otherwise the expression/kinetic bounds caused it -> constraint
+        #   3) Otherwise the expression-derived bounds caused it -> constraint
         infeasibility_reason = None
         failed = fba_result.status != "optimal" or fba_result.growth_rate < 0.01
         if failed and wild_type is not None and wild_type.status == "optimal" and wild_type.growth_rate >= 0.01:
@@ -340,7 +340,7 @@ class SimulationRunner:
             if baseline.status != "optimal" or baseline.growth_rate < 0.01:
                 infeasibility_reason = (
                     "biological: the medium cannot support growth even without "
-                    "expression or kinetic constraints (e.g. no usable electron "
+                    "expression-derived constraints (e.g. no usable electron "
                     "acceptor for this carbon source)"
                 )
             else:
@@ -357,7 +357,7 @@ class SimulationRunner:
                     infeasibility_reason = (
                         "constraint: growth is possible on this medium "
                         f"({env_only.growth_rate:.4f} hr-1 without GENESIS bounds), so the "
-                        "expression/kinetic bounds applied by GENESIS caused the failure"
+                        "expression-derived bounds applied by GENESIS caused the failure"
                     )
 
         # B4: report the master regulators explicitly (the full active list

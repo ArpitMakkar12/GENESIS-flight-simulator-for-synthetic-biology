@@ -1,9 +1,10 @@
 """Converts AI expression predictions + BRENDA kinetics into FBA reaction bounds.
 
 This is the bridge between Pillar 2 (AI) and Pillar 3 (FBA).
-Formula: flux_bound = relative_expression × reference_tpm × kcat × activity_factor(T, pH) × saturation
+Formula: flux_bound = DEFAULT_UPPER × relative enzyme capacity (gene rule over
+relative expression), as in E-Flux. Kinetic caps (TPM × kcat) are off by
+default; see USE_KINETIC_CAPS.
 
-Owned by: Arpit
 """
 import ast
 import logging
@@ -27,9 +28,16 @@ class ReactionBound:
     source: str            # 'expression', 'kinetics', 'transport', 'default'
 
 
-# Scaling factor to convert TPM × kcat into flux units (mmol/gDW/hr)
-# This accounts for: mRNA → protein translation, protein per cell, cell mass
-# Calibrated so reference conditions reproduce wild-type iML1515 growth rate
+# Kinetic caps are OFF. The old formula multiplied an RNA level (TPM) by
+# kcat and by EXPRESSION_TO_FLUX_SCALE, a number that was never derived
+# from data. With kcat values re-curated from BRENDA (1 Nov 2026) it
+# predicts wild-type growth of about 0.3 1/h on glucose against a measured
+# 0.6-0.7, so every reaction now uses the expression-relative bound below.
+# Set to True only to reproduce the old behaviour for a sensitivity check.
+USE_KINETIC_CAPS = False
+
+# Converts TPM × kcat into flux units. Not derived from data; only used
+# when USE_KINETIC_CAPS is True.
 EXPRESSION_TO_FLUX_SCALE = 1e-4
 
 # Default bounds when no kinetics data is available
@@ -201,7 +209,7 @@ class BoundCompiler:
                 rel_rxn = now / ref
                 rule_tag = "gpr"
 
-            kinetics = self._kinetics_cache.get(rxn_id)
+            kinetics = self._kinetics_cache.get(rxn_id) if USE_KINETIC_CAPS else None
             if kinetics:
                 activity = self.get_activity_factor(
                     kinetics["optimal_temp"],

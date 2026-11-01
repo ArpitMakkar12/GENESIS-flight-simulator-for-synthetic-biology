@@ -125,7 +125,7 @@ No `.env` file is needed: `docker-compose.yml` sets every variable. `.env.exampl
 | Reactions | 2,712 reactions and 4,754 gene–reaction links | iML1515 |
 | Pathway names | reaction subsystems (40 pathways) | BiGG Models (iML1515 JSON) |
 | Regulators | 20 core regulators with condition rules | RegulonDB, with a built-in curated fallback |
-| Kinetics, transporters, parts | enzyme kinetics, 26 transporters, 23 genetic parts | BRENDA, TCDB, iGEM Registry (curated, built in) |
+| Kinetics, transporters, parts | 18 enzyme kinetics rows (stored, not used by the engine; see `docs/kinetics/`), 26 transporters, 23 genetic parts | BRENDA (curated with references), TCDB, iGEM Registry |
 | Part sequences | full DNA for coding parts | `backend/app/data/registry_sequences.json` (checksummed) |
 | PRECISE-1K | measured expression for 4,351 genes; 10,783 regulatory interactions | SBRG/precise1k |
 
@@ -253,7 +253,7 @@ GitHub Actions runs both suites and a production build of the frontend on every 
 | [PRECISE-1K](https://github.com/SBRG/precise1k), Lamoureux et al., *Nucleic Acids Research* 51(19):10176 (2023), [doi:10.1093/nar/gkad750](https://doi.org/10.1093/nar/gkad750) | Reference expression, regulatory network, validation ground truth |
 | [NCBI RefSeq NC_000913.3](https://www.ncbi.nlm.nih.gov/nuccore/NC_000913.3) | *E. coli* K-12 MG1655 genome |
 | [RegulonDB](https://regulondb.ccg.unam.mx/) | Core transcription-factor rules |
-| [BRENDA](https://www.brenda-enzymes.org/) | Enzyme kinetics, temperature and pH optima |
+| [BRENDA](https://www.brenda-enzymes.org/) | Enzyme turnover numbers and optima, curated 1 Nov 2026 (`docs/kinetics/`) |
 | [TCDB](https://www.tcdb.org/) | Transporter classification |
 | [iGEM Registry](https://parts.igem.org/) | Characterised genetic parts and sequences |
 | Gerosa et al., *Cell Systems* 1(4):270–282 (2015), [doi:10.1016/j.cels.2015.09.008](https://doi.org/10.1016/j.cels.2015.09.008) | Measured carbon uptake rates |
