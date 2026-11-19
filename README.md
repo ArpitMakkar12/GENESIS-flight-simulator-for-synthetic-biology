@@ -9,6 +9,8 @@ Every prediction is explained step by step, and the engine is checked against pu
 [![CI](https://github.com/ArpitMakkar12/GENESIS-flight-simulator-for-synthetic-biology/actions/workflows/ci.yml/badge.svg)](https://github.com/ArpitMakkar12/GENESIS-flight-simulator-for-synthetic-biology/actions/workflows/ci.yml)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-View%20App-2563eb?style=for-the-badge&logo=railway&logoColor=white)](https://genesis-flight-simulator-for-synthe.vercel.app/)
 
+[![Watch Video](https://img.shields.io/badge/▶_Watch_Demo_Video-0a0f1e?style=for-the-badge&logo=youtube&logoColor=ff3c3c)](https://youtu.be/CFtM4f0hros?si=UJ-p7SW2PpH47to1)
+
 ---
 
 ## Contents
